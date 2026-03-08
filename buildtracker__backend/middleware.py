@@ -1,0 +1,225 @@
+import traceback
+import time
+from django.utils.deprecation import MiddlewareMixin
+from rest_framework.response import Response
+from rest_framework import status
+from utils import create_system_event_log, create_user_activity_log
+
+
+class ExceptionLoggingMiddleware(MiddlewareMixin):
+    """Middleware to log exceptions as system events"""
+    
+    def process_exception(self, request, exception):
+        """Log all exceptions to SystemEventLog"""
+        try:
+            workspace = None
+            if hasattr(request, 'resolver_match') and request.resolver_match:
+                workspace_id = request.resolver_match.kwargs.get('workspaceId')
+                if workspace_id:
+                    from workspaces.models import Workspace
+                    try:
+                        workspace = Workspace.objects.get(id=workspace_id)
+                    except Workspace.DoesNotExist:
+                        pass
+            
+            error_type = type(exception).__name__
+            error_message = str(exception)
+            
+            # Sanitize stack trace - remove sensitive environment variables or local variables if possible
+            # For now, let's at least ensure we don't log extremely long traces that might contain sensitive data dumps
+            stack_trace = traceback.format_exc()
+            if len(stack_trace) > 10000:
+                stack_trace = stack_trace[:5000] + "\n... [TRUNCATED FOR SECURITY] ...\n" + stack_trace[-5000:]
+            
+            # Simple sanitization filter for common sensitive keys in stack trace lines
+            sanitized_lines = []
+            sensitive_keys = ['password', 'secret', 'token', 'key', 'auth', 'social']
+            for line in stack_trace.splitlines():
+                if any(key in line.lower() for key in sensitive_keys) and '=' in line:
+                    sanitized_lines.append(f"{line.split('=')[0]}= [REDACTED]")
+                else:
+                    sanitized_lines.append(line)
+            stack_trace = "\n".join(sanitized_lines)
+            
+            create_system_event_log(
+                event_type='error',
+                severity='error',
+                message=f"{error_type}: {error_message}",
+                source=request.path,
+                workspace=workspace,
+                error_code=error_type,
+                stack_trace=stack_trace,
+                metadata={
+                    'method': request.method,
+                    'user': str(request.user) if hasattr(request, 'user') else 'Anonymous',
+                    'ip_address': request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR')),
+                    'user_agent': request.META.get('HTTP_USER_AGENT', '')
+                }
+            )
+        except Exception as log_error:
+            # Don't let logging errors break the application
+            print(f"Error logging exception: {log_error}")
+        
+        # Return None to let Django's default exception handling continue
+        return None
+
+
+class APIUsageTrackingMiddleware(MiddlewareMixin):
+    """Middleware to track API usage patterns"""
+    
+    def process_request(self, request):
+        """Record request start time"""
+        request._start_time = time.time()
+        return None
+    
+    def process_response(self, request, response):
+        """Log API usage after response"""
+        try:
+            if hasattr(request, 'user') and request.user.is_authenticated:
+                duration_ms = None
+                if hasattr(request, '_start_time'):
+                    duration_ms = int((time.time() - request._start_time) * 1000)
+                
+                workspace = None
+                if hasattr(request, 'resolver_match') and request.resolver_match:
+                    workspace_id = request.resolver_match.kwargs.get('workspaceId')
+                    if workspace_id:
+                        from workspaces.models import Workspace
+                        try:
+                            workspace = Workspace.objects.get(id=workspace_id)
+                        except Workspace.DoesNotExist:
+                            pass
+                
+                # Determine module from path
+                module = 'unknown'
+                path = request.path
+                if '/tasks/' in path:
+                    module = 'tasks'
+                elif '/workspaces/' in path and '/members' not in path:
+                    module = 'workspaces'
+                elif '/members' in path or '/team' in path:
+                    module = 'team'
+                elif '/wiki/' in path:
+                    module = 'wiki'
+                elif '/integrations/' in path:
+                    module = 'integrations'
+                elif '/reports/' in path:
+                    module = 'reports'
+                elif '/monitoring/' in path or '/system/' in path:
+                    module = 'monitoring'
+                elif '/logs/' in path:
+                    module = 'logs'
+                elif '/module' in path:
+                    module = 'modules'
+                elif '/dashboard' in path or path == '/api/' or path == '/api':
+                    module = 'dashboard'
+                
+                # Sanitize query params
+                query_params = dict(request.GET)
+                sensitive_keys = ['password', 'token', 'secret', 'key', 'auth', 'id_token', 'refresh_token']
+                for key in list(query_params.keys()):
+                    if any(sk in key.lower() for sk in sensitive_keys):
+                        query_params[key] = '[REDACTED]'
+
+                create_user_activity_log(
+                    user=request.user,
+                    activity_type='api_request',
+                    workspace=workspace,
+                    module=module,
+                    endpoint=request.path,
+                    duration_ms=duration_ms,
+                    metadata={
+                        'method': request.method,
+                        'status_code': response.status_code,
+                        'query_params': query_params
+                    },
+                    request=request
+                )
+                
+                # Auto-create ModuleAccess for module navigation
+                if module != 'unknown' and request.method == 'GET':
+                    from modules.models import ModuleAccess
+                    ModuleAccess.objects.create(
+                        user=request.user,
+                        workspace=workspace,
+                        module_name=module,
+                        session_duration=duration_ms // 1000 if duration_ms else 0,
+                        ip_address=request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR')),
+                        user_agent=request.META.get('HTTP_USER_AGENT', '')
+                    )
+        except Exception as log_error:
+            # Don't let logging errors break the application
+            print(f"Error logging API usage: {log_error}")
+        
+        return response
+
+import contextvars
+from django.db.backends.utils import CursorWrapper
+from asgiref.sync import iscoroutinefunction, markcoroutinefunction
+
+# Global context var to track queries per request regardless of threads
+query_count_var = contextvars.ContextVar('query_count', default=0)
+
+# Monkey-patch Django's CursorWrapper to globally count queries across ASGI thread boundaries
+if not hasattr(CursorWrapper, '_patched_for_counting'):
+    original_execute = CursorWrapper.execute
+    original_executemany = CursorWrapper.executemany
+
+    def patched_execute(self, sql, params=None):
+        try:
+            query_count_var.set(query_count_var.get() + 1)
+        except LookupError:
+            pass
+        return original_execute(self, sql, params)
+
+    def patched_executemany(self, sql, param_list):
+        try:
+            query_count_var.set(query_count_var.get() + 1)
+        except LookupError:
+            pass
+        return original_executemany(self, sql, param_list)
+
+    CursorWrapper.execute = patched_execute
+    CursorWrapper.executemany = patched_executemany
+    CursorWrapper._patched_for_counting = True
+
+
+from django.utils.decorators import sync_and_async_middleware
+
+@sync_and_async_middleware
+def QueryAndTimingMiddleware(get_response):
+    """
+    Middleware to intercept every request, track execution time, and count DB queries.
+    Prints the result strictly to the terminal for debugging purposes.
+    """
+    # Initialize the middleware flag
+    if iscoroutinefunction(get_response):
+        async def middleware(request):
+            start_time = time.time()
+            token = query_count_var.set(0)
+            try:
+                response = await get_response(request)
+                return response
+            finally:
+                duration = time.time() - start_time
+                queries = query_count_var.get()
+                status_code = getattr(response, 'status_code', 'Unknown') if 'response' in locals() else 'Error'
+                print(f"\n[ENDPOINT] {request.method} {request.path} [{status_code}]")
+                print(f"[PERFORMANCE] Time: {duration:.4f}s | DB Queries: {queries}\n")
+                query_count_var.reset(token)
+        return middleware
+    else:
+        def middleware(request):
+            start_time = time.time()
+            token = query_count_var.set(0)
+            try:
+                response = get_response(request)
+                return response
+            finally:
+                duration = time.time() - start_time
+                queries = query_count_var.get()
+                status_code = getattr(response, 'status_code', 'Unknown') if 'response' in locals() else 'Error'
+                print(f"\n[ENDPOINT] {request.method} {request.path} [{status_code}]")
+                print(f"[PERFORMANCE] Time: {duration:.4f}s | DB Queries: {queries}\n")
+                query_count_var.reset(token)
+        return middleware

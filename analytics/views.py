@@ -1,0 +1,620 @@
+from adrf.decorators import api_view
+from asgiref.sync import sync_to_async
+from rest_framework import status, permissions
+from rest_framework.decorators import permission_classes
+from rest_framework.response import Response
+from django.shortcuts import get_object_or_404
+from django.db.models import Q, Count, Avg, Sum, F, Case, When, IntegerField
+from django.utils import timezone
+from django.core.cache import cache
+from drf_spectacular.utils import extend_schema
+from datetime import datetime, timedelta
+
+from .serializers import (
+    DashboardStatsSerializer, DashboardChartsSerializer, PerformanceAnalyticsSerializer,
+    TrendsAnalyticsSerializer
+)
+from django.db.models.functions import TruncDate
+from workspaces.models import Workspace, WorkspaceMember
+from tasks.models import Task
+from utils import sanitize_input, check_workspace_permission, cache_lock
+
+def get_dashboard_stats(workspace, date_from=None, date_to=None, milestone=None, sprint=None):
+    cache_key = f"dashboard_stats_{workspace.id}_{date_from}_{date_to}_{milestone}_{sprint}"
+    cached_data = cache.get(cache_key)
+    if cached_data:
+        return cached_data
+        
+    lock_key = cache_key + "_lock"
+    with cache_lock(lock_key):
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            return cached_data
+            
+        tasks = Task.objects.filter(workspace=workspace)
+    
+    if date_from:
+        tasks = tasks.filter(created_at__gte=date_from)
+    if date_to:
+        tasks = tasks.filter(created_at__lte=date_to)
+    if milestone:
+        tasks = tasks.filter(milestone=milestone)
+    if sprint:
+        tasks = tasks.filter(sprint=sprint)
+    
+    total_tasks = tasks.count()
+    completed_tasks = tasks.filter(status='completed').count()
+    in_progress_tasks = tasks.filter(status='in_progress').count()
+    overdue_tasks = tasks.filter(end_date__lt=timezone.now().date(), status__in=['pending', 'in_progress']).count()
+    blocked_tasks = tasks.filter(status='blocked').count()
+    
+    total_members = WorkspaceMember.objects.filter(workspace=workspace).count()
+    
+    velocity = round(completed_tasks / max(total_tasks, 1), 2) if total_tasks > 0 else 0
+    
+    total = max(total_tasks, 1)
+    completion_weight = (completed_tasks / total) * 40
+    in_progress_weight = (in_progress_tasks / total) * 30
+    overdue_weight = (overdue_tasks / total) * 30
+    health_score = max(0, min(100, round(completion_weight + in_progress_weight - overdue_weight, 1)))
+    
+    milestone_progress = []
+    if milestone:
+        milestone_tasks = tasks.filter(milestone=milestone)
+        milestone_completed = milestone_tasks.filter(status='completed').count()
+        milestone_total = milestone_tasks.count()
+        milestone_progress.append({
+            'milestone_id': milestone,
+            'total_tasks': milestone_total,
+            'completed_tasks': milestone_completed,
+            'progress_percentage': (milestone_completed / max(milestone_total, 1)) * 100
+        })
+    
+    sprint_progress = []
+    if sprint:
+        sprint_tasks = tasks.filter(sprint=sprint)
+        sprint_completed = sprint_tasks.filter(status='completed').count()
+        sprint_total = sprint_tasks.count()
+        sprint_progress.append({
+            'sprint_id': sprint,
+            'total_tasks': sprint_total,
+            'completed_tasks': sprint_completed,
+            'progress_percentage': (sprint_completed / max(sprint_total, 1)) * 100
+        })
+    
+    stats = {
+        'totalTasks': total_tasks,
+        'completedTasks': completed_tasks,
+        'inProgressTasks': in_progress_tasks,
+        'overdueTasks': overdue_tasks,
+        'blockedTasks': blocked_tasks,
+        'totalMembers': total_members,
+        'velocity': velocity,
+        'healthScore': health_score,
+        'milestoneProgress': milestone_progress,
+        'sprintProgress': sprint_progress
+    }
+    
+    cache.set(cache_key, stats, 300)
+    return stats
+
+def get_dashboard_charts(workspace, period='monthly', milestone=None, date_from=None, date_to=None):
+    cache_key = f"dashboard_charts_{workspace.id}_{period}_{milestone}_{date_from}_{date_to}"
+    cached_data = cache.get(cache_key)
+    if cached_data:
+        return cached_data
+        
+    lock_key = cache_key + "_lock"
+    with cache_lock(lock_key):
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            return cached_data
+            
+        tasks = Task.objects.filter(workspace=workspace)
+    if date_from:
+        tasks = tasks.filter(created_at__gte=date_from)
+    if date_to:
+        tasks = tasks.filter(created_at__lte=date_to)
+    if milestone:
+        tasks = tasks.filter(milestone=milestone)
+    
+    status_data = list(tasks.values('status').annotate(count=Count('id')))
+    status_chart = [{'label': item['status'], 'value': item['count']} for item in status_data]
+    
+    priority_data = list(tasks.values('priority').annotate(count=Count('id')))
+    priority_chart = [{'label': item['priority'], 'value': item['count']} for item in priority_data]
+    
+    end_date = date_to if date_to else timezone.now().date()
+    start_date = date_from if date_from else (end_date - timedelta(days=30))
+    trend_data = []
+    
+    if (end_date - start_date).days > 365:
+        start_date = end_date - timedelta(days=365)
+
+    current_date = start_date
+    completed_counts = dict(
+        tasks.filter(
+            status='completed',
+            updated_at__date__gte=start_date,
+            updated_at__date__lte=end_date
+        )
+        .annotate(date=TruncDate('updated_at'))
+        .values('date')
+        .annotate(count=Count('id'))
+        .values_list('date', 'count')
+    )
+    
+    while current_date <= end_date:
+        daily_completed = completed_counts.get(current_date, 0)
+        trend_data.append({
+            'date': current_date,
+            'label': current_date.strftime('%Y-%m-%d'),
+            'value': daily_completed
+        })
+        current_date += timedelta(days=1)
+    
+    member_performance = []
+    members = WorkspaceMember.objects.filter(workspace=workspace).select_related('user')
+    
+    user_stats = {}
+    tasks_assigned_counts = tasks.values('assigned_to').annotate(
+        total=Count('id'),
+        completed=Count('id', filter=Q(status='completed')),
+        pending=Count('id', filter=Q(status='pending')),
+        in_progress=Count('id', filter=Q(status='in_progress')),
+        overdue=Count('id', filter=Q(end_date__lt=timezone.now().date(), status__in=['pending', 'in_progress']))
+    )
+    for stat in tasks_assigned_counts:
+        user_stats[stat['assigned_to']] = stat
+
+    completed_task_times = tasks.filter(
+        status='completed', created_at__isnull=False, updated_at__isnull=False, assigned_to__isnull=False
+    ).values('assigned_to', 'created_at', 'updated_at')
+    
+    user_times = {}
+    for t in completed_task_times:
+        uid = t['assigned_to']
+        duration = (t['updated_at'] - t['created_at']).total_seconds() / 86400
+        if uid not in user_times:
+            user_times[uid] = {'total': 0, 'count': 0}
+        user_times[uid]['total'] += duration
+        user_times[uid]['count'] += 1
+        
+    for member in members:
+        uid = member.user.id
+        stats = user_stats.get(uid, {})
+        tasks_assigned = stats.get('total', 0)
+        completed = stats.get('completed', 0)
+        pending = stats.get('pending', 0)
+        in_progress = stats.get('in_progress', 0)
+        overdue = stats.get('overdue', 0)
+        
+        time_data = user_times.get(uid, {})
+        avg_time = round(time_data['total'] / time_data['count'], 1) if time_data.get('count', 0) > 0 else 0
+        
+        efficiency = (completed / max(tasks_assigned, 1)) * 100
+        
+        first = member.user.first_name or ""
+        last = member.user.last_name or ""
+        full_name = f"{first} {last}".strip()
+        display_name = full_name if full_name else member.user.email.split('@')[0]
+
+        member_performance.append({
+            'member_name': display_name,
+            'member_email': member.user.email,
+            'member_avatar': member.user.avatar.url if member.user.avatar else None,
+            'member_phone': member.phone,
+            'member_job_role': member.job_role,
+            'member_role': member.role,
+            'tasks_assigned': tasks_assigned,
+            'tasks_completed': completed,
+            'tasks_pending': pending,
+            'tasks_in_progress': in_progress,
+            'tasks_overdue': overdue,
+            'avg_completion_time': avg_time,
+            'efficiency_score': round(efficiency, 1)
+        })
+    
+    charts = {
+        'statusData': status_chart,
+        'priorityData': priority_chart,
+        'trendData': trend_data,
+        'memberPerformance': member_performance,
+        'milestoneChart': [],
+        'sprintChart': []
+    }
+    
+    cache.set(cache_key, charts, 600)
+    return charts
+
+def get_performance_analytics(workspace, date_from=None, date_to=None):
+    cache_key = f"performance_analytics_{workspace.id}_{date_from}_{date_to}"
+    cached_data = cache.get(cache_key)
+    if cached_data:
+        return cached_data
+        
+    lock_key = cache_key + "_lock"
+    with cache_lock(lock_key):
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            return cached_data
+            
+        tasks = Task.objects.filter(workspace=workspace)
+    if date_from:
+        tasks = tasks.filter(created_at__gte=date_from)
+    if date_to:
+        tasks = tasks.filter(created_at__lte=date_to)
+    
+    total_tasks = tasks.count()
+    completed_tasks = tasks.filter(status='completed').count()
+    completion_rate = (completed_tasks / max(total_tasks, 1)) * 100
+    
+    completed_with_dates = tasks.filter(
+        status='completed',
+        created_at__isnull=False,
+        updated_at__isnull=False
+    )
+    
+    if completed_with_dates.exists():
+        total_time = sum(
+            (task.updated_at - task.created_at).total_seconds() / 86400
+            for task in completed_with_dates
+        )
+        average_task_time = round(total_time / completed_with_dates.count(), 1)
+    else:
+        average_task_time = 0
+    
+    blocked_tasks = tasks.filter(status='blocked').count()
+    blocked_rate = (blocked_tasks / max(total_tasks, 1)) * 100
+    team_efficiency = round(max(0, completion_rate - blocked_rate), 1)
+    
+    bottlenecks = []
+    overdue_count = tasks.filter(end_date__lt=timezone.now().date(), status__in=['pending', 'in_progress']).count()
+    if overdue_count > total_tasks * 0.2:
+        overdue_rate = (overdue_count / max(total_tasks, 1)) * 100
+        impact_score = min(10, overdue_rate / 10)
+        bottlenecks.append({
+            'area': 'Task Management',
+            'severity': 'high',
+            'description': f'{overdue_count} tasks are overdue',
+            'impact_score': round(impact_score, 1)
+        })
+    
+    blocked_count = tasks.filter(status='blocked').count()
+    if blocked_count > 0:
+        blocked_rate = (blocked_count / max(total_tasks, 1)) * 100
+        impact_score = min(10, blocked_rate / 10)
+        severity = 'high' if blocked_rate > 20 else 'medium'
+        bottlenecks.append({
+            'area': 'Workflow',
+            'severity': severity,
+            'description': f'{blocked_count} tasks are blocked',
+            'impact_score': round(impact_score, 1)
+        })
+    
+    milestone_metrics = []
+    milestones = tasks.values('milestone').distinct()
+    for milestone_data in milestones:
+        if milestone_data['milestone']:
+            milestone_tasks = tasks.filter(milestone=milestone_data['milestone'])
+            milestone_completed = milestone_tasks.filter(status='completed').count()
+            milestone_total = milestone_tasks.count()
+            
+            milestone_metrics.append({
+                'milestone_id': milestone_data['milestone'],
+                'milestone_name': f"Milestone {milestone_data['milestone']}",
+                'completion_rate': (milestone_completed / max(milestone_total, 1)) * 100,
+                'on_track': milestone_completed / max(milestone_total, 1) > 0.7,
+                'estimated_completion': timezone.now().date() + timedelta(days=30)
+            })
+    
+    sprint_metrics = []
+    sprints = tasks.values('sprint').distinct()
+    for sprint_data in sprints:
+        if sprint_data['sprint']:
+            sprint_tasks = tasks.filter(sprint=sprint_data['sprint'])
+            sprint_completed = sprint_tasks.filter(status='completed').count()
+            sprint_total = sprint_tasks.count()
+            sprint_in_progress = sprint_tasks.filter(status='in_progress').count()
+            
+            completion_rate = (sprint_completed / max(sprint_total, 1)) * 100
+            burndown_rate = (sprint_completed + sprint_in_progress) / max(sprint_total, 1)
+            
+            sprint_metrics.append({
+                'sprint_id': sprint_data['sprint'],
+                'sprint_name': f"Sprint {sprint_data['sprint']}",
+                'velocity': sprint_completed,
+                'burndown_rate': round(burndown_rate, 2),
+                'completion_rate': completion_rate
+            })
+    
+    analytics = {
+        'completionRate': completion_rate,
+        'averageTaskTime': average_task_time,
+        'teamEfficiency': team_efficiency,
+        'bottlenecks': bottlenecks,
+        'milestoneMetrics': milestone_metrics,
+        'sprintMetrics': sprint_metrics
+    }
+    
+    cache.set(cache_key, analytics, 600)
+    return analytics
+
+def get_trends_analytics(workspace, period='weekly', date_from=None, date_to=None):
+    cache_key = f"trends_analytics_{workspace.id}_{period}_{date_from}_{date_to}"
+    cached_data = cache.get(cache_key)
+    if cached_data:
+        return cached_data
+        
+    lock_key = cache_key + "_lock"
+    with cache_lock(lock_key):
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            return cached_data
+            
+        tasks = Task.objects.filter(workspace=workspace)
+    
+    end_date = date_to if date_to else timezone.now().date()
+    
+    if period == 'weekly':
+        start_date = date_from if date_from else (end_date - timedelta(weeks=12))
+        delta = timedelta(weeks=1)
+    elif period == 'monthly':
+        start_date = date_from if date_from else (end_date - timedelta(days=365))
+        delta = timedelta(days=30)
+    else:
+        start_date = date_from if date_from else (end_date - timedelta(days=30))
+        delta = timedelta(days=1)
+    
+    if (end_date - start_date).days > 365:
+        start_date = end_date - timedelta(days=365)
+    
+    task_creation_trend = []
+    completion_trend = []
+    velocity_trend = []
+    milestone_trend = []
+    
+    prev_created = 0
+    prev_completed = 0
+    
+    current_date = start_date
+    
+    created_counts = dict(
+        tasks.filter(created_at__date__range=[start_date, end_date + delta])
+        .annotate(date=TruncDate('created_at'))
+        .values('date')
+        .annotate(count=Count('id'))
+        .values_list('date', 'count')
+    )
+    completed_counts = dict(
+        tasks.filter(status='completed', updated_at__date__range=[start_date, end_date + delta])
+        .annotate(date=TruncDate('updated_at'))
+        .values('date')
+        .annotate(count=Count('id'))
+        .values_list('date', 'count')
+    )
+    milestone_completed_counts = dict(
+        tasks.filter(status='completed', milestone__isnull=False, updated_at__date__range=[start_date, end_date + delta])
+        .annotate(date=TruncDate('updated_at'))
+        .values('date')
+        .annotate(count=Count('id'))
+        .values_list('date', 'count')
+    )
+    
+    while current_date <= end_date:
+        period_end = min(current_date + delta, end_date)
+        
+        created_count = sum(count for d, count in created_counts.items() if d and current_date <= d <= period_end)
+        completed_count = sum(count for d, count in completed_counts.items() if d and current_date <= d <= period_end)
+        milestone_completed = sum(count for d, count in milestone_completed_counts.items() if d and current_date <= d <= period_end)
+        
+        created_change = ((created_count - prev_created) / max(prev_created, 1)) * 100 if prev_created > 0 else 0
+        completed_change = ((completed_count - prev_completed) / max(prev_completed, 1)) * 100 if prev_completed > 0 else 0
+        
+        task_creation_trend.append({
+            'date': current_date,
+            'value': created_count,
+            'change_percentage': round(created_change, 1)
+        })
+        
+        completion_trend.append({
+            'date': current_date,
+            'value': completed_count,
+            'change_percentage': round(completed_change, 1)
+        })
+        
+        velocity_trend.append({
+            'date': current_date,
+            'value': completed_count / 7 if period == 'weekly' else completed_count,
+            'change_percentage': round(completed_change, 1)
+        })
+        
+        milestone_trend.append({
+            'date': current_date,
+            'value': milestone_completed,
+            'change_percentage': round(completed_change, 1)
+        })
+        
+        prev_created = created_count
+        prev_completed = completed_count
+        current_date = period_end + timedelta(days=1)
+    
+    trends = {
+        'taskCreationTrend': task_creation_trend,
+        'completionTrend': completion_trend,
+        'velocityTrend': velocity_trend,
+        'milestoneTrend': milestone_trend
+    }
+    
+    cache.set(cache_key, trends, 900)
+    return trends
+
+@extend_schema(
+    tags=["Analytics"],
+    summary="Workspace Dashboard Stats",
+    description="Get dashboard statistics for workspace",
+    responses={200: {'description': 'Dashboard statistics'}}
+)
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+async def workspace_dashboard_stats(request, workspaceId):
+    @sync_to_async
+    def _sync_logic():
+        workspace = get_object_or_404(Workspace, id=workspaceId)
+
+        if not check_workspace_permission(request.user, workspace):
+            return Response({'error': 'Permission denied: You must be a member of this workspace'}, status=status.HTTP_403_FORBIDDEN)
+
+        date_from = request.GET.get('DateFrom')
+        date_to = request.GET.get('DateTo')
+        milestone = request.GET.get('Milestone')
+        sprint = request.GET.get('Sprint')
+
+        if date_from:
+            try:
+                date_from = datetime.strptime(date_from, '%Y-%m-%d').date()
+            except ValueError:
+                date_from = None
+
+        if date_to:
+            try:
+                date_to = datetime.strptime(date_to, '%Y-%m-%d').date()
+            except ValueError:
+                date_to = None
+
+        if milestone:
+            try:
+                milestone = int(milestone)
+            except ValueError:
+                milestone = None
+
+        if sprint:
+            try:
+                sprint = int(sprint)
+            except ValueError:
+                sprint = None
+
+        stats = get_dashboard_stats(workspace, date_from, date_to, milestone, sprint)
+        return Response(stats)
+
+    return await _sync_logic()
+
+@extend_schema(
+    tags=["Analytics"],
+    summary="Workspace Dashboard Charts",
+    description="Get chart data for workspace dashboard",
+    responses={200: {'description': 'Dashboard chart data'}}
+)
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+async def workspace_dashboard_charts(request, workspaceId):
+    @sync_to_async
+    def _sync_logic():
+        workspace = get_object_or_404(Workspace, id=workspaceId)
+
+        if not check_workspace_permission(request.user, workspace):
+            return Response({'error': 'Permission denied: You must be a member of this workspace'}, status=status.HTTP_403_FORBIDDEN)
+
+        period = request.GET.get('Period', 'monthly')
+        milestone = request.GET.get('Milestone')
+        date_from = request.GET.get('DateFrom')
+        date_to = request.GET.get('DateTo')
+
+
+        if date_from:
+            try:
+                date_from = datetime.strptime(date_from, '%Y-%m-%d').date()
+            except ValueError:
+                date_from = None
+
+        if date_to:
+            try:
+                date_to = datetime.strptime(date_to, '%Y-%m-%d').date()
+            except ValueError:
+                date_to = None
+
+        if milestone:
+            try:
+                milestone = int(milestone)
+            except ValueError:
+                milestone = None
+
+        charts = get_dashboard_charts(workspace, period, milestone, date_from, date_to)
+        return Response(charts)
+
+    return await _sync_logic()
+
+@extend_schema(
+    tags=["Analytics"],
+    summary="Workspace Performance Analytics",
+    description="Get performance analytics for workspace",
+    responses={200: {'description': 'Performance analytics data'}}
+)
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+async def workspace_analytics_performance(request, workspaceId):
+    @sync_to_async
+    def _sync_logic():
+        workspace = get_object_or_404(Workspace, id=workspaceId)
+
+        if not check_workspace_permission(request.user, workspace):
+            return Response({'error': 'Permission denied: You must be a member of this workspace'}, status=status.HTTP_403_FORBIDDEN)
+
+        date_from = request.GET.get('DateFrom')
+        date_to = request.GET.get('DateTo')
+
+
+        if date_from:
+            try:
+                date_from = datetime.strptime(date_from, '%Y-%m-%d').date()
+            except ValueError:
+                date_from = None
+
+        if date_to:
+            try:
+                date_to = datetime.strptime(date_to, '%Y-%m-%d').date()
+            except ValueError:
+                date_to = None
+
+        analytics = get_performance_analytics(workspace, date_from, date_to)
+        return Response(analytics)
+
+    return await _sync_logic()
+
+@extend_schema(
+    tags=["Analytics"],
+    summary="Workspace Trends Analytics",
+    description="Get trend analytics for workspace",
+    responses={200: {'description': 'Trends analytics data'}}
+)
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+async def workspace_analytics_trends(request, workspaceId):
+    @sync_to_async
+    def _sync_logic():
+        workspace = get_object_or_404(Workspace, id=workspaceId)
+
+        if not check_workspace_permission(request.user, workspace):
+            return Response({'error': 'Permission denied: You must be a member of this workspace'}, status=status.HTTP_403_FORBIDDEN)
+
+        period = request.GET.get('Period', 'weekly')
+        date_from = request.GET.get('DateFrom')
+        date_to = request.GET.get('DateTo')
+
+
+        if date_from:
+            try:
+                date_from = datetime.strptime(date_from, '%Y-%m-%d').date()
+            except ValueError:
+                date_from = None
+
+        if date_to:
+            try:
+                date_to = datetime.strptime(date_to, '%Y-%m-%d').date()
+            except ValueError:
+                date_to = None
+
+        trends = get_trends_analytics(workspace, period, date_from, date_to)
+        return Response(trends)
+    return await _sync_logic()
+
