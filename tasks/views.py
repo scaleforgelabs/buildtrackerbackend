@@ -63,14 +63,14 @@ def get_filtered_tasks(queryset, request):
     if date_from:
         try:
             date_from = datetime.strptime(date_from, '%Y-%m-%d').date()
-            queryset = queryset.filter(created_at__gte=date_from)
+            queryset = queryset.filter(created_at__date__gte=date_from)
         except ValueError:
             pass
     
     if date_to:
         try:
             date_to = datetime.strptime(date_to, '%Y-%m-%d').date()
-            queryset = queryset.filter(created_at__lte=date_to)
+            queryset = queryset.filter(created_at__date__lte=date_to)
         except ValueError:
             pass
     

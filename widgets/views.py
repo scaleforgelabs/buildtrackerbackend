@@ -108,9 +108,9 @@ AVAILABLE_WIDGETS = [
 def get_widget_data(widget_type, workspace, date_from=None, date_to=None):
     tasks = Task.objects.filter(workspace=workspace)
     if date_from:
-        tasks = tasks.filter(created_at__gte=date_from)
+        tasks = tasks.filter(created_at__date__gte=date_from)
     if date_to:
-        tasks = tasks.filter(created_at__lte=date_to)
+        tasks = tasks.filter(created_at__date__lte=date_to)
     
     if widget_type == 'task_summary':
         return {

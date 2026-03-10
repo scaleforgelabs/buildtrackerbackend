@@ -41,10 +41,10 @@ def get_filtered_queryset(queryset, request):
         )
     
     if date_from:
-        queryset = queryset.filter(created_at__gte=date_from)
+        queryset = queryset.filter(created_at__date__gte=date_from)
     
     if date_to:
-        queryset = queryset.filter(created_at__lte=date_to)
+        queryset = queryset.filter(created_at__date__lte=date_to)
     
     order_prefix = '-' if sort_order == 'desc' else ''
     queryset = queryset.order_by(f"{order_prefix}{sort_column}")

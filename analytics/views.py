@@ -40,9 +40,9 @@ def get_dashboard_stats(workspace, date_from=None, date_to=None, milestone=None,
         tasks = Task.objects.filter(workspace=workspace)
     
     if date_from:
-        tasks = tasks.filter(created_at__gte=date_from)
+        tasks = tasks.filter(created_at__date__gte=date_from)
     if date_to:
-        tasks = tasks.filter(created_at__lte=date_to)
+        tasks = tasks.filter(created_at__date__lte=date_to)
     if milestone:
         tasks = tasks.filter(milestone=milestone)
     if sprint:
@@ -124,9 +124,9 @@ def get_dashboard_charts(workspace, period='monthly', milestone=None, date_from=
             
         tasks = Task.objects.filter(workspace=workspace)
     if date_from:
-        tasks = tasks.filter(created_at__gte=date_from)
+        tasks = tasks.filter(created_at__date__gte=date_from)
     if date_to:
-        tasks = tasks.filter(created_at__lte=date_to)
+        tasks = tasks.filter(created_at__date__lte=date_to)
     if milestone:
         tasks = tasks.filter(milestone=milestone)
     
@@ -259,9 +259,9 @@ def get_performance_analytics(workspace, date_from=None, date_to=None, bypass_ca
             
         tasks = Task.objects.filter(workspace=workspace)
     if date_from:
-        tasks = tasks.filter(created_at__gte=date_from)
+        tasks = tasks.filter(created_at__date__gte=date_from)
     if date_to:
-        tasks = tasks.filter(created_at__lte=date_to)
+        tasks = tasks.filter(created_at__date__lte=date_to)
     
     total_tasks = tasks.count()
     completed_tasks = tasks.filter(status='completed').count()
@@ -377,6 +377,11 @@ def get_trends_analytics(workspace, period='weekly', date_from=None, date_to=Non
                 return cached_data
             
         tasks = Task.objects.filter(workspace=workspace)
+    
+        if date_from:
+            tasks = tasks.filter(created_at__date__gte=date_from)
+        if date_to:
+            tasks = tasks.filter(created_at__date__lte=date_to)
     
     end_date = date_to if date_to else timezone.now().date()
     

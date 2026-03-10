@@ -75,10 +75,10 @@ def get_filtered_workspaces(queryset, request):
         )
     
     if date_from:
-        queryset = queryset.filter(created_at__gte=date_from)
+        queryset = queryset.filter(created_at__date__gte=date_from)
     
     if date_to:
-        queryset = queryset.filter(created_at__lte=date_to)
+        queryset = queryset.filter(created_at__date__lte=date_to)
     
     if status_filter:
         queryset = queryset.filter(status=status_filter)
