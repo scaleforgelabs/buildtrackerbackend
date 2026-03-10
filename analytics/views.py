@@ -9,6 +9,7 @@ from django.utils import timezone
 from django.core.cache import cache
 from drf_spectacular.utils import extend_schema
 from datetime import datetime, timedelta
+from cachalot.api import cachalot_disabled
 
 from .serializers import (
     DashboardStatsSerializer, DashboardChartsSerializer, PerformanceAnalyticsSerializer,
@@ -19,17 +20,19 @@ from workspaces.models import Workspace, WorkspaceMember
 from tasks.models import Task
 from utils import sanitize_input, check_workspace_permission, cache_lock
 
-def get_dashboard_stats(workspace, date_from=None, date_to=None, milestone=None, sprint=None):
+def get_dashboard_stats(workspace, date_from=None, date_to=None, milestone=None, sprint=None, bypass_cache=False):
     cache_key = f"dashboard_stats_{workspace.id}_{date_from}_{date_to}_{milestone}_{sprint}"
-    cached_data = cache.get(cache_key)
-    if cached_data:
-        return cached_data
-        
-    lock_key = cache_key + "_lock"
-    with cache_lock(lock_key):
+    if not bypass_cache:
         cached_data = cache.get(cache_key)
         if cached_data:
             return cached_data
+            
+    lock_key = cache_key + "_lock"
+    with cache_lock(lock_key):
+        if not bypass_cache:
+            cached_data = cache.get(cache_key)
+            if cached_data:
+                return cached_data
             
         tasks = Task.objects.filter(workspace=workspace)
     
@@ -95,20 +98,23 @@ def get_dashboard_stats(workspace, date_from=None, date_to=None, milestone=None,
         'sprintProgress': sprint_progress
     }
     
-    cache.set(cache_key, stats, 300)
+    if stats and not bypass_cache:
+        cache.set(cache_key, stats, 300)
     return stats
 
-def get_dashboard_charts(workspace, period='monthly', milestone=None, date_from=None, date_to=None):
+def get_dashboard_charts(workspace, period='monthly', milestone=None, date_from=None, date_to=None, bypass_cache=False):
     cache_key = f"dashboard_charts_{workspace.id}_{period}_{milestone}_{date_from}_{date_to}"
-    cached_data = cache.get(cache_key)
-    if cached_data:
-        return cached_data
-        
-    lock_key = cache_key + "_lock"
-    with cache_lock(lock_key):
+    if not bypass_cache:
         cached_data = cache.get(cache_key)
         if cached_data:
             return cached_data
+            
+    lock_key = cache_key + "_lock"
+    with cache_lock(lock_key):
+        if not bypass_cache:
+            cached_data = cache.get(cache_key)
+            if cached_data:
+                return cached_data
             
         tasks = Task.objects.filter(workspace=workspace)
     if date_from:
@@ -224,20 +230,23 @@ def get_dashboard_charts(workspace, period='monthly', milestone=None, date_from=
         'sprintChart': []
     }
     
-    cache.set(cache_key, charts, 600)
+    if charts and not bypass_cache:
+        cache.set(cache_key, charts, 600)
     return charts
 
-def get_performance_analytics(workspace, date_from=None, date_to=None):
+def get_performance_analytics(workspace, date_from=None, date_to=None, bypass_cache=False):
     cache_key = f"performance_analytics_{workspace.id}_{date_from}_{date_to}"
-    cached_data = cache.get(cache_key)
-    if cached_data:
-        return cached_data
-        
-    lock_key = cache_key + "_lock"
-    with cache_lock(lock_key):
+    if not bypass_cache:
         cached_data = cache.get(cache_key)
         if cached_data:
             return cached_data
+            
+    lock_key = cache_key + "_lock"
+    with cache_lock(lock_key):
+        if not bypass_cache:
+            cached_data = cache.get(cache_key)
+            if cached_data:
+                return cached_data
             
         tasks = Task.objects.filter(workspace=workspace)
     if date_from:
@@ -337,20 +346,23 @@ def get_performance_analytics(workspace, date_from=None, date_to=None):
         'sprintMetrics': sprint_metrics
     }
     
-    cache.set(cache_key, analytics, 600)
+    if analytics and not bypass_cache:
+        cache.set(cache_key, analytics, 600)
     return analytics
 
-def get_trends_analytics(workspace, period='weekly', date_from=None, date_to=None):
+def get_trends_analytics(workspace, period='weekly', date_from=None, date_to=None, bypass_cache=False):
     cache_key = f"trends_analytics_{workspace.id}_{period}_{date_from}_{date_to}"
-    cached_data = cache.get(cache_key)
-    if cached_data:
-        return cached_data
-        
-    lock_key = cache_key + "_lock"
-    with cache_lock(lock_key):
+    if not bypass_cache:
         cached_data = cache.get(cache_key)
         if cached_data:
             return cached_data
+            
+    lock_key = cache_key + "_lock"
+    with cache_lock(lock_key):
+        if not bypass_cache:
+            cached_data = cache.get(cache_key)
+            if cached_data:
+                return cached_data
             
         tasks = Task.objects.filter(workspace=workspace)
     
@@ -446,7 +458,8 @@ def get_trends_analytics(workspace, period='weekly', date_from=None, date_to=Non
         'milestoneTrend': milestone_trend
     }
     
-    cache.set(cache_key, trends, 900)
+    if trends and not bypass_cache:
+        cache.set(cache_key, trends, 300)
     return trends
 
 @extend_schema(
@@ -494,8 +507,16 @@ async def workspace_dashboard_stats(request, workspaceId):
             except ValueError:
                 sprint = None
 
-        stats = get_dashboard_stats(workspace, date_from, date_to, milestone, sprint)
-        return Response(stats)
+        bypass_cache = bool(request.GET.get('_t')) or request.GET.get('BypassCache') == 'true'
+        
+        with cachalot_disabled():
+            stats = get_dashboard_stats(workspace, date_from, date_to, milestone, sprint, bypass_cache=bypass_cache)
+
+        response = Response(stats)
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response['Pragma'] = 'no-cache'
+        response['Expires'] = '0'
+        return response
 
     return await _sync_logic()
 
@@ -539,8 +560,16 @@ async def workspace_dashboard_charts(request, workspaceId):
             except ValueError:
                 milestone = None
 
-        charts = get_dashboard_charts(workspace, period, milestone, date_from, date_to)
-        return Response(charts)
+        bypass_cache = bool(request.GET.get('_t')) or request.GET.get('BypassCache') == 'true'
+
+        with cachalot_disabled():
+            charts = get_dashboard_charts(workspace, period, milestone, date_from, date_to, bypass_cache=bypass_cache)
+
+        response = Response(charts)
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response['Pragma'] = 'no-cache'
+        response['Expires'] = '0'
+        return response
 
     return await _sync_logic()
 
@@ -576,8 +605,16 @@ async def workspace_analytics_performance(request, workspaceId):
             except ValueError:
                 date_to = None
 
-        analytics = get_performance_analytics(workspace, date_from, date_to)
-        return Response(analytics)
+        bypass_cache = bool(request.GET.get('_t')) or request.GET.get('BypassCache') == 'true'
+
+        with cachalot_disabled():
+            analytics = get_performance_analytics(workspace, date_from, date_to, bypass_cache=bypass_cache)
+
+        response = Response(analytics)
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response['Pragma'] = 'no-cache'
+        response['Expires'] = '0'
+        return response
 
     return await _sync_logic()
 
@@ -614,7 +651,15 @@ async def workspace_analytics_trends(request, workspaceId):
             except ValueError:
                 date_to = None
 
-        trends = get_trends_analytics(workspace, period, date_from, date_to)
-        return Response(trends)
+        bypass_cache = bool(request.GET.get('_t')) or request.GET.get('BypassCache') == 'true'
+
+        with cachalot_disabled():
+            trends = get_trends_analytics(workspace, period, date_from, date_to, bypass_cache=bypass_cache)
+
+        response = Response(trends)
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response['Pragma'] = 'no-cache'
+        response['Expires'] = '0'
+        return response
     return await _sync_logic()
 

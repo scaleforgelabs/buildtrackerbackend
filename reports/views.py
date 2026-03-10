@@ -12,6 +12,7 @@ from django.core.cache import cache
 from django.http import HttpResponse
 from drf_spectacular.utils import extend_schema
 from datetime import datetime, timedelta
+from cachalot.api import cachalot_disabled
 import uuid
 import secrets
 
@@ -77,29 +78,36 @@ async def workspace_reports(request, workspaceId):
         if not check_workspace_permission(request.user, workspace):
             return Response({'error': 'Permission denied: You must be a member of this workspace'}, status=status.HTTP_403_FORBIDDEN)
 
-        reports = workspace.reports.all()
-        filtered_reports = get_filtered_reports(reports, request)
+        with cachalot_disabled():
+            reports = workspace.reports.all()
+            filtered_reports = get_filtered_reports(reports, request)
 
-        paginator = StandardResultsSetPagination()
-        page = paginator.paginate_queryset(filtered_reports, request)
+            paginator = StandardResultsSetPagination()
+            page = paginator.paginate_queryset(filtered_reports, request)
 
-        serializer = ReportSerializer(page, many=True)
+            serializer = ReportSerializer(page, many=True)
 
-        return Response({
-            'data': serializer.data,
-            'pagination': {
-                'page': paginator.page.number,
-                'page_size': paginator.page_size,
-                'total_pages': paginator.page.paginator.num_pages,
-                'total_count': paginator.page.paginator.count
-            },
-            'filters': {
-                'report_type': request.GET.get('ReportType', ''),
-                'status': request.GET.get('Status', ''),
-                'date_from': request.GET.get('DateFrom', ''),
-                'date_to': request.GET.get('DateTo', '')
+            data = {
+                'data': serializer.data,
+                'pagination': {
+                    'page': paginator.page.number,
+                    'page_size': paginator.page_size,
+                    'total_pages': paginator.page.paginator.num_pages,
+                    'total_count': paginator.page.paginator.count
+                },
+                'filters': {
+                    'report_type': request.GET.get('ReportType', ''),
+                    'status': request.GET.get('Status', ''),
+                    'date_from': request.GET.get('DateFrom', ''),
+                    'date_to': request.GET.get('DateTo', '')
+                }
             }
-        })
+
+        response = Response(data)
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response['Pragma'] = 'no-cache'
+        response['Expires'] = '0'
+        return response
 
     return await _sync_logic()
 
@@ -200,16 +208,23 @@ async def report_detail(request, workspaceId, id):
         if not check_workspace_permission(request.user, workspace):
             return Response({'error': 'Permission denied: You must be a member of this workspace'}, status=status.HTTP_403_FORBIDDEN)
 
-        return Response({
-            'report': ReportSerializer(report).data,
-            'data': report.data,
-            'charts': report.data.get('charts', []),
-            'summary': {
-                'generated_at': report.completed_at,
-                'parameters': report.parameters,
-                'record_count': len(report.data.get('tasks', [])) if 'tasks' in report.data else 0
+        with cachalot_disabled():
+            response_data = {
+                'report': ReportSerializer(report).data,
+                'data': report.data,
+                'charts': report.data.get('charts', []),
+                'summary': {
+                    'generated_at': report.completed_at,
+                    'parameters': report.parameters,
+                    'record_count': len(report.data.get('tasks', [])) if 'tasks' in report.data else 0
+                }
             }
-        })
+
+        response = Response(response_data)
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response['Pragma'] = 'no-cache'
+        response['Expires'] = '0'
+        return response
 
     return await _sync_logic()
 
@@ -312,31 +327,38 @@ async def user_reports(request, workspaceId, userId):
         elif not check_workspace_permission(request.user, workspace):
             return Response({'error': 'Permission denied: You must be a member of this workspace'}, status=status.HTTP_403_FORBIDDEN)
 
-        reports = Report.objects.filter(user=user, workspace=workspace)
-        filtered_reports = get_filtered_reports(reports, request)
+        with cachalot_disabled():
+            reports = Report.objects.filter(user=user, workspace=workspace)
+            filtered_reports = get_filtered_reports(reports, request)
 
-        paginator = StandardResultsSetPagination()
-        page = paginator.paginate_queryset(filtered_reports, request)
+            paginator = StandardResultsSetPagination()
+            page = paginator.paginate_queryset(filtered_reports, request)
 
-        serializer = ReportSerializer(page, many=True)
+            serializer = ReportSerializer(page, many=True)
 
-        tasks = Task.objects.filter(assigned_to=user, workspace=workspace)
-        performance_summary = {
-            'total_tasks': tasks.count(),
-            'completed_tasks': tasks.filter(status='completed').count(),
-            'completion_rate': tasks.filter(status='completed').count() / max(tasks.count(), 1) * 100,
-        }
+            tasks = Task.objects.filter(assigned_to=user, workspace=workspace)
+            performance_summary = {
+                'total_tasks': tasks.count(),
+                'completed_tasks': tasks.filter(status='completed').count(),
+                'completion_rate': tasks.filter(status='completed').count() / max(tasks.count(), 1) * 100,
+            }
 
-        return Response({
-            'data': serializer.data,
-            'pagination': {
-                'page': paginator.page.number,
-                'page_size': paginator.page_size,
-                'total_pages': paginator.page.paginator.num_pages,
-                'total_count': paginator.page.paginator.count
-            },
-            'performance_summary': performance_summary
-        })
+            data = {
+                'data': serializer.data,
+                'pagination': {
+                    'page': paginator.page.number,
+                    'page_size': paginator.page_size,
+                    'total_pages': paginator.page.paginator.num_pages,
+                    'total_count': paginator.page.paginator.count
+                },
+                'performance_summary': performance_summary
+            }
+
+        response = Response(data)
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response['Pragma'] = 'no-cache'
+        response['Expires'] = '0'
+        return response
 
     return await _sync_logic()
 
