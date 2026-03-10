@@ -99,8 +99,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'buildtracker__backend.middleware.QueryAndTimingMiddleware',
     'corsheaders.middleware.CorsMiddleware',
+    'buildtracker__backend.middleware.QueryAndTimingMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',

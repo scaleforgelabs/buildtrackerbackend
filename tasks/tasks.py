@@ -24,7 +24,7 @@ def send_task_assignment_email(task_id):
             
             Description: {task.task_description or 'No description provided'}
             
-            View task: {settings.FRONTEND_URL}/workspaces/{task.workspace.id}/tasks/{task.id}
+            View task: {settings.FRONTEND_URL}/{task.workspace.id}/tasks/{task.id}
             """
             
             send_dual_notification(
@@ -59,7 +59,7 @@ def send_task_status_update_email(task_id, old_status, new_status):
             Status changed from: {old_status} → {new_status}
             Progress: {task.percent_complete}%
             
-            View task: {settings.FRONTEND_URL}/workspaces/{task.workspace.id}/tasks/{task.id}
+            View task: {settings.FRONTEND_URL}/{task.workspace.id}/tasks/{task.id}
             """
             
             if task.created_by:
@@ -90,7 +90,7 @@ def send_task_due_reminder_email(task_id):
             Priority: {task.get_priority_display()}
             Progress: {task.percent_complete}%
             
-            View task: {settings.FRONTEND_URL}/workspaces/{task.workspace.id}/tasks/{task.id}
+            View task: {settings.FRONTEND_URL}/{task.workspace.id}/tasks/{task.id}
             """
             
             send_mail(
