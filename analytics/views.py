@@ -21,7 +21,10 @@ from tasks.models import Task
 from utils import sanitize_input, check_workspace_permission, cache_lock
 
 def get_dashboard_stats(workspace, date_from=None, date_to=None, milestone=None, sprint=None, bypass_cache=False):
-    cache_key = f"dashboard_stats_{workspace.id}_{date_from}_{date_to}_{milestone}_{sprint}"
+    version_key = f"workspace_analytics_version_{workspace.id}"
+    version = cache.get(version_key, 1)
+    
+    cache_key = f"dashboard_stats_{workspace.id}_{date_from}_{date_to}_{milestone}_{sprint}_v{version}"
     if not bypass_cache:
         cached_data = cache.get(cache_key)
         if cached_data:
@@ -103,7 +106,10 @@ def get_dashboard_stats(workspace, date_from=None, date_to=None, milestone=None,
     return stats
 
 def get_dashboard_charts(workspace, period='monthly', milestone=None, date_from=None, date_to=None, bypass_cache=False):
-    cache_key = f"dashboard_charts_{workspace.id}_{period}_{milestone}_{date_from}_{date_to}"
+    version_key = f"workspace_analytics_version_{workspace.id}"
+    version = cache.get(version_key, 1)
+    
+    cache_key = f"dashboard_charts_{workspace.id}_{period}_{milestone}_{date_from}_{date_to}_v{version}"
     if not bypass_cache:
         cached_data = cache.get(cache_key)
         if cached_data:
@@ -235,7 +241,10 @@ def get_dashboard_charts(workspace, period='monthly', milestone=None, date_from=
     return charts
 
 def get_performance_analytics(workspace, date_from=None, date_to=None, bypass_cache=False):
-    cache_key = f"performance_analytics_{workspace.id}_{date_from}_{date_to}"
+    version_key = f"workspace_analytics_version_{workspace.id}"
+    version = cache.get(version_key, 1)
+    
+    cache_key = f"performance_analytics_{workspace.id}_{date_from}_{date_to}_v{version}"
     if not bypass_cache:
         cached_data = cache.get(cache_key)
         if cached_data:
@@ -351,7 +360,10 @@ def get_performance_analytics(workspace, date_from=None, date_to=None, bypass_ca
     return analytics
 
 def get_trends_analytics(workspace, period='weekly', date_from=None, date_to=None, bypass_cache=False):
-    cache_key = f"trends_analytics_{workspace.id}_{period}_{date_from}_{date_to}"
+    version_key = f"workspace_analytics_version_{workspace.id}"
+    version = cache.get(version_key, 1)
+    
+    cache_key = f"trends_analytics_{workspace.id}_{period}_{date_from}_{date_to}_v{version}"
     if not bypass_cache:
         cached_data = cache.get(cache_key)
         if cached_data:
