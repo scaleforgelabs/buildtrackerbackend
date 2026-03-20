@@ -542,9 +542,19 @@ async def workspace_member_detail(request, id, userId):
                 return Response({'error': 'Cannot remove workspace owner'}, status=status.HTTP_400_BAD_REQUEST)
 
             member_email = member.user.email
+            member_user_id = member.user.id
             member_id = member.id
             old_values = {'user_email': member.user.email, 'role': member.role}
             member.delete()
+
+            # Notify removed member via email + in-app
+            from .tasks import send_workspace_member_removed_email
+            send_workspace_member_removed_email.delay(
+                str(member_user_id),
+                str(workspace.id),
+                workspace.name,
+                request.user.email,
+            )
 
             create_workspace_log(
                 workspace=workspace,
@@ -743,19 +753,6 @@ async def workspace_invitations(request, id):
 
                 from .tasks import send_workspace_invitation_email
                 send_workspace_invitation_email.delay(str(invitation.id))
-
-
-                try:
-                    from core.tasks import send_email_task
-                    invitation_url = f"{settings.FRONTEND_URL}/workspace-invitations/{invitation.token}"
-                    send_email_task.delay(
-                        subject=f'Invitation to join {workspace.name}',
-                        message=f'You have been invited to join {workspace.name} as a {invitation.role}. Click the link to accept: {invitation_url}',
-                        recipient_list=[invitation.email],
-                        fail_silently=False,
-                    )
-                except Exception as mail_error:
-                    pass
 
                 return Response(
                     {'invitation': WorkspaceInvitationSerializer(invitation).data},

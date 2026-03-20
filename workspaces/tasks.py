@@ -72,6 +72,31 @@ def send_workspace_invitation_email(invitation_id):
         return f"Invitation {invitation_id} not found"
 
 @shared_task
+def send_workspace_member_removed_email(user_id, workspace_id, workspace_name, removed_by_email):
+    """Send notification to a user when they are removed from a workspace."""
+    try:
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        user = User.objects.get(id=user_id)
+
+        subject = f"You have been removed from '{workspace_name}'"
+        message = f"""
+        Hi {user.first_name or user.email},
+
+        You have been removed from the workspace '{workspace_name}' by {removed_by_email}.
+
+        If you believe this was a mistake, please contact your workspace administrator.
+
+        — The BuildTracker Team
+        """
+
+        send_dual_notification(user, subject, message, fail_silently=True)
+
+        return f"Member removal notification sent to {user.email}"
+    except Exception as e:
+        return f"Failed to send removal notification: {str(e)}"
+
+@shared_task
 def cleanup_expired_workspace_invitations():
     expired_invitations = WorkspaceInvitation.objects.filter(
         status='pending',

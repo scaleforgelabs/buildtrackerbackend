@@ -535,21 +535,6 @@ async def send_organization_invitation(request, id):
 
             send_organization_invitation_email.delay(str(invitation.id))
 
-            # Also send email directly as fallback
-            from core.tasks import send_email_task
-            from django.conf import settings
-
-            try:
-                invitation_url = f"{settings.FRONTEND_URL}/invitations/{invitation.token}"
-                send_email_task.delay(
-                    subject=f'Invitation to join {organization.name}',
-                    message=f'You have been invited to join {organization.name} as a {role}. Click the link to accept: {invitation_url}',
-                    recipient_list=[email],
-                    fail_silently=False,
-                )
-            except Exception as mail_error:
-                print(f"Direct email failed: {mail_error}")
-
             return Response({
                 'invitation': {
                     'id': str(invitation.id),

@@ -237,6 +237,55 @@ async def workspace_shared_links(request, workspaceId):
 
 @extend_schema(
     tags=["Quick Links"],
+    summary="Workspace Shared Quick Link Detail",
+    description="PUT: Update a shared quick link. DELETE: Delete a shared quick link",
+    request={
+        'application/json': {
+            'type': 'object',
+            'properties': {
+                'title': {'type': 'string'},
+                'url': {'type': 'string'},
+                'description': {'type': 'string'},
+                'icon': {'type': 'string'},
+                'category': {'type': 'string'},
+                'visibility': {'type': 'string', 'enum': ['all_members', 'admins_only']}
+            }
+        }
+    },
+    responses={200: {'description': 'Shared quick link updated / deleted'}}
+)
+@api_view(['PUT', 'DELETE'])
+@permission_classes([permissions.IsAuthenticated])
+@parser_classes([JSONParser, MultiPartParser, FormParser])
+async def workspace_shared_link_detail(request, workspaceId, id):
+    @sync_to_async
+    def _sync_logic():
+        workspace = get_object_or_404(Workspace, id=workspaceId)
+
+        if not check_workspace_permission(request.user, workspace):
+            return Response({'error': 'Permission denied: You must be a member of this workspace'}, status=status.HTTP_403_FORBIDDEN)
+
+        if not check_workspace_permission(request.user, workspace, ['Owner', 'Admin']):
+            return Response({'error': 'Only owners and admins can modify shared quick links'}, status=status.HTTP_403_FORBIDDEN)
+
+        shared_link = get_object_or_404(SharedQuickLink, id=id, workspace=workspace)
+
+        if request.method == 'PUT':
+            update_data = {k: v for k, v in request.data.items() if v is not None and v != ''}
+            serializer = SharedQuickLinkSerializer(shared_link, data=update_data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({'shared_link': serializer.data})
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        elif request.method == 'DELETE':
+            shared_link.delete()
+            return Response({'message': 'Shared quick link deleted successfully'})
+
+    return await _sync_logic()
+
+@extend_schema(
+    tags=["Quick Links"],
     summary="User Recent Items",
     description="GET: List recent items. POST: Track item access",
     parameters=[
