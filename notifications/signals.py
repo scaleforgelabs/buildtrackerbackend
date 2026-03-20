@@ -86,7 +86,8 @@ def task_notification(sender, instance, created, **kwargs):
                 )
         
         if task.end_date:
-            days_until_deadline = (task.end_date - timezone.now().date()).days
+            task_end_date = task.end_date.date() if hasattr(task.end_date, 'date') else task.end_date
+            days_until_deadline = (task_end_date - timezone.now().date()).days
             if 0 <= days_until_deadline <= 2 and task.assigned_to:
                 Notification.objects.create(
                     user=task.assigned_to,
