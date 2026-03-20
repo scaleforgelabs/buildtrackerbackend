@@ -140,7 +140,9 @@ class TaskSerializer(serializers.ModelSerializer):
         start_date = validated_data.get('start_date', instance.start_date)
         end_date = validated_data.get('end_date', instance.end_date)
         if start_date and end_date:
-            duration_days = (end_date - start_date).days
+            sd = start_date.date() if hasattr(start_date, 'date') else start_date
+            ed = end_date.date() if hasattr(end_date, 'date') else end_date
+            duration_days = (ed - sd).days
             validated_data['duration'] = f"{duration_days} days"
         
         return super().update(instance, validated_data)
@@ -192,7 +194,9 @@ class TaskCreateSerializer(serializers.ModelSerializer):
         start_date = validated_data.get('start_date')
         end_date = validated_data.get('end_date')
         if start_date and end_date:
-            duration_days = (end_date - start_date).days
+            sd = start_date.date() if hasattr(start_date, 'date') else start_date
+            ed = end_date.date() if hasattr(end_date, 'date') else end_date
+            duration_days = (ed - sd).days
             validated_data['duration'] = f"{duration_days} days"
         
         # assigned_to is already a User object from validate_assigned_to
