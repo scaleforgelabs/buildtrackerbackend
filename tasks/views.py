@@ -289,12 +289,14 @@ async def task_detail(request, workspaceId, id):
         if not check_workspace_permission(request.user, workspace):
             return Response({'error': 'Permission denied: You must be a member of this workspace'}, status=status.HTTP_403_FORBIDDEN)
 
+        task = get_object_or_404(
+            Task.objects.select_related('assigned_to', 'created_by').prefetch_related('comments__attachments', 'attachments'),
+            id=id, 
+            workspace=workspace
+        )
+
         if request.method == 'GET':
             create_user_activity_log(user=request.user, activity_type='api_request', workspace=workspace, module='tasks', request=request)
-
-            task = Task.objects.select_related('assigned_to', 'created_by').prefetch_related(
-                'comments__attachments', 'attachments'
-            ).get(id=id, workspace=workspace)
 
             serializer = TaskSerializer(task, context={'request': request})
             return Response({
