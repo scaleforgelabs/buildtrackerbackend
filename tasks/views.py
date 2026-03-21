@@ -825,9 +825,6 @@ async def task_comments(request, workspaceId, taskId):
             if serializer.is_valid():
                 comment = serializer.save()
                 
-                from .tasks import send_task_comment_notification
-                send_task_comment_notification.delay(task.id, comment.id)
-
                 create_workspace_log(
                     workspace=workspace,
                     user=request.user,

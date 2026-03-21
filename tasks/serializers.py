@@ -125,7 +125,7 @@ class TaskCommentCreateSerializer(serializers.ModelSerializer):
         user_name = f"{user.first_name} {user.last_name}".strip() or user.email
         
         recipients = set()
-        if task.assigned_to and task.assigned_to != user:
+        if task.assigned_to:
             recipients.add(task.assigned_to)
             
         admins = WorkspaceMember.objects.filter(
@@ -134,7 +134,7 @@ class TaskCommentCreateSerializer(serializers.ModelSerializer):
         ).select_related('user')
         
         for admin in admins:
-            if admin.user and admin.user != user:
+            if admin.user:
                 recipients.add(admin.user)
                 
         for recipient in recipients:
