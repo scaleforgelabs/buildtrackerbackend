@@ -610,6 +610,9 @@ async def update_task_blocker(request, workspaceId, id):
         has_blocker = request.data.get('has_blocker')
         blocker_reason = request.data.get('blocker_reason')
 
+        old_has_blocker = task.has_blocker
+        old_blocker_reason = task.blocker_reason
+
         if has_blocker is not None:
             if isinstance(has_blocker, str):
                 has_blocker = has_blocker.lower() in ('true', '1', 'yes')
@@ -619,6 +622,16 @@ async def update_task_blocker(request, workspaceId, id):
             task.blocker_reason = blocker_reason
 
         task.save()
+        
+        blocker_activated_or_updated = (
+            (task.has_blocker and not old_has_blocker) or 
+            (task.has_blocker and blocker_reason is not None and blocker_reason != old_blocker_reason)
+        )
+        
+        if blocker_activated_or_updated:
+            from .tasks import send_task_blocker_notification
+            send_task_blocker_notification.delay(task.id, task.blocker_reason, request.user.id)
+            
         return Response({'task': TaskSerializer(task).data})
 
     return await _sync_logic()
@@ -784,6 +797,9 @@ async def task_comments(request, workspaceId, taskId):
             serializer = TaskCommentCreateSerializer(data=clean_data, context={'task': task, 'request': request})
             if serializer.is_valid():
                 comment = serializer.save()
+                
+                from .tasks import send_task_comment_notification
+                send_task_comment_notification.delay(task.id, comment.id)
 
                 create_workspace_log(
                     workspace=workspace,

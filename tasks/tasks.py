@@ -160,3 +160,137 @@ def send_daily_task_summary():
         )
     
     return f"Daily summary sent to {users_with_stats.count()} users"
+
+@shared_task
+def send_task_comment_notification(task_id, comment_id):
+    try:
+        from workspaces.models import WorkspaceMember
+        from notifications.models import Notification
+        
+        task = Task.objects.get(id=task_id)
+        comment = TaskComment.objects.get(id=comment_id)
+        commenter = comment.user
+        
+        # Get workspace admins/owners
+        admins = WorkspaceMember.objects.filter(
+            workspace=task.workspace,
+            role__in=['Owner', 'Admin']
+        ).select_related('user')
+        
+        recipients = set()
+        
+        # Add admins
+        for admin in admins:
+            if admin.user:
+                recipients.add(admin.user)
+                
+        # Add task assignee
+        if task.assigned_to:
+            recipients.add(task.assigned_to)
+            
+        # Remove the person who made the comment
+        if commenter in recipients:
+            recipients.remove(commenter)
+            
+        if not recipients:
+            return "No recipients found for comment notification"
+            
+        subject = f"New Comment on Task: {task.task_name}"
+        message = f"""
+        {commenter.first_name} left a new comment on a task in {task.workspace.name}.
+        
+        Task: {task.task_name}
+        Comment: "{strip_tags(comment.comment_text)[:500]}{'...' if len(strip_tags(comment.comment_text)) > 500 else ''}"
+        
+        View task: {settings.FRONTEND_URL}/{task.workspace.id}/tasks/{task.id}
+        """
+        
+        for user in recipients:
+            # Create in-app notification
+            Notification.objects.create(
+                user=user,
+                workspace=task.workspace,
+                action=f'New Comment: {task.task_name}',
+                description=f'{commenter.first_name} commented on the task.',
+                note_type='task_comment',
+                severity='info'
+            )
+            
+            # Send Email/SMS
+            send_dual_notification(user, subject, message, fail_silently=True)
+            
+        return f"Comment notification sent to {len(recipients)} users"
+    except Task.DoesNotExist:
+        return f"Task {task_id} not found"
+    except TaskComment.DoesNotExist:
+        return f"Comment {comment_id} not found"
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+@shared_task
+def send_task_blocker_notification(task_id, blocker_reason, triggered_by_user_id):
+    try:
+        from django.contrib.auth import get_user_model
+        from workspaces.models import WorkspaceMember
+        from notifications.models import Notification
+        
+        User = get_user_model()
+        task = Task.objects.get(id=task_id)
+        
+        trigger_user = None
+        if triggered_by_user_id:
+            try:
+                trigger_user = User.objects.get(id=triggered_by_user_id)
+            except User.DoesNotExist:
+                pass
+        
+        # Get workspace admins/owners
+        admins = WorkspaceMember.objects.filter(
+            workspace=task.workspace,
+            role__in=['Owner', 'Admin']
+        ).select_related('user')
+        
+        recipients = set()
+        
+        for admin in admins:
+            if admin.user:
+                recipients.add(admin.user)
+                
+        if task.assigned_to:
+            recipients.add(task.assigned_to)
+            
+        if trigger_user and trigger_user in recipients:
+            recipients.remove(trigger_user)
+            
+        if not recipients:
+            return "No recipients found for blocker notification"
+            
+        subject = f"URGENT: Task Blocked - {task.task_name}"
+        
+        trigger_name = trigger_user.first_name if trigger_user else "Someone"
+        message = f"""
+        {trigger_name} has reported a blocker on a task in {task.workspace.name}.
+        
+        Task: {task.task_name}
+        Blocker Reason: {blocker_reason or 'No reason provided'}
+        
+        Please review the task immediately: {settings.FRONTEND_URL}/{task.workspace.id}/tasks/{task.id}
+        """
+        
+        for user in recipients:
+            Notification.objects.create(
+                user=user,
+                workspace=task.workspace,
+                action=f'Task Blocked: {task.task_name}',
+                description=blocker_reason or 'A blocker was reported.',
+                note_type='task_blocked',
+                severity='error'
+            )
+            
+            send_dual_notification(user, subject, message, fail_silently=True)
+            
+        return f"Blocker notification sent to {len(recipients)} users"
+    except Task.DoesNotExist:
+        return f"Task {task_id} not found"
+    except Exception as e:
+        return f"Error: {str(e)}"

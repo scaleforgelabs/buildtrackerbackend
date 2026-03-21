@@ -142,7 +142,14 @@ def validate_file_extension(filename, allowed_extensions=None):
         return False, f'File extension .{ext} is strictly prohibited for security reasons.'
     
     if allowed_extensions is None:
-        allowed_extensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'gif', 'zip', 'csv', 'txt', 'JSON', 'json']
+        allowed_extensions = [
+            'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 
+            'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'tiff',
+            'zip', 'rar', '7z', 'tar', 'gz',
+            'csv', 'txt', 'json', 'md', 'rtf',
+            'mp4', 'mov', 'avi', 'webm', 'mp3', 'wav',
+            'fig', 'sketch', 'psd', 'ai', 'eps', 'xd', 'sql'
+        ]
     
     allowed_extensions = [e.lower() for e in allowed_extensions]
     
