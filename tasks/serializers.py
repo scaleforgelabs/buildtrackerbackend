@@ -38,16 +38,31 @@ class TaskCommentAttachmentSerializer(serializers.ModelSerializer):
 
 class TaskCommentSerializer(serializers.ModelSerializer):
     user_name = serializers.SerializerMethodField()
+    user_detail = serializers.SerializerMethodField()
     attachments = TaskCommentAttachmentSerializer(many=True, read_only=True)
     parent_comment_id = serializers.CharField(source='parent_comment.id', read_only=True)
     
     class Meta:
         model = TaskComment
-        fields = ['id', 'comment_text', 'user', 'user_name', 'parent_comment_id', 'attachments', 'created_at', 'updated_at']
+        fields = ['id', 'comment_text', 'user', 'user_detail', 'user_name', 'parent_comment_id', 'attachments', 'created_at', 'updated_at']
         read_only_fields = ['user', 'created_at', 'updated_at']
     
     def get_user_name(self, obj):
         return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.email
+
+    def get_user_detail(self, obj):
+        request = self.context.get('request')
+        profile_picture_url = None
+        if obj.user.profile_picture:
+            profile_picture_url = obj.user.profile_picture.url
+            if request:
+                profile_picture_url = request.build_absolute_uri(profile_picture_url)
+        return {
+            'first_name': obj.user.first_name,
+            'last_name': obj.user.last_name,
+            'email': obj.user.email,
+            'profile_picture': profile_picture_url
+        }
 
 class TaskCommentCreateSerializer(serializers.ModelSerializer):
     attachments = serializers.ListField(
