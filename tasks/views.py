@@ -320,7 +320,19 @@ async def task_detail(request, workspaceId, id):
             if serializer.is_valid():
                 old_status = task.status
                 old_assigned_to = task.assigned_to
-                old_values = {k: getattr(task, k, None) for k in update_data.keys()}
+                
+                old_values = {}
+                for k in update_data.keys():
+                    val = getattr(task, k, None)
+                    if val is None:
+                        old_values[k] = None
+                    elif hasattr(val, 'id'):
+                        old_values[k] = str(val.id)
+                    elif hasattr(val, 'isoformat'):
+                        old_values[k] = val.isoformat()
+                    else:
+                        old_values[k] = str(val)
+
                 serializer.save()
 
                 if 'assigned_to' in update_data and old_assigned_to != task.assigned_to:
