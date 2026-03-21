@@ -53,14 +53,14 @@ class TaskCommentSerializer(serializers.ModelSerializer):
     def get_user_detail(self, obj):
         request = self.context.get('request')
         profile_picture_url = None
-        if obj.user.profile_picture:
-            profile_picture_url = obj.user.profile_picture.url
+        if hasattr(obj.user, 'avatar') and obj.user.avatar:
+            profile_picture_url = obj.user.avatar.url
             if request:
                 profile_picture_url = request.build_absolute_uri(profile_picture_url)
         return {
-            'first_name': obj.user.first_name,
-            'last_name': obj.user.last_name,
-            'email': obj.user.email,
+            'first_name': getattr(obj.user, 'first_name', ''),
+            'last_name': getattr(obj.user, 'last_name', ''),
+            'email': getattr(obj.user, 'email', ''),
             'profile_picture': profile_picture_url
         }
 
