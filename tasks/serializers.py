@@ -66,6 +66,7 @@ class TaskCommentSerializer(serializers.ModelSerializer):
 
 class TaskCommentCreateSerializer(serializers.ModelSerializer):
     attachments = serializers.ListField(
+        child=serializers.FileField(),
         required=False, 
         allow_empty=True,
         write_only=True
@@ -168,6 +169,7 @@ class TaskSerializer(serializers.ModelSerializer):
 
 class TaskCreateSerializer(serializers.ModelSerializer):
     attachments = serializers.ListField(
+        child=serializers.FileField(),
         required=False, 
         allow_empty=True,
         write_only=True
