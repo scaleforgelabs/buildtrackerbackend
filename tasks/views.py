@@ -342,6 +342,13 @@ async def task_detail(request, workspaceId, id):
                 if 'status' in update_data and old_status != task.status:
                     send_task_status_update_email.delay(task.id, old_status, task.status)
 
+                safe_update_data = {}
+                for k, v in update_data.items():
+                    if hasattr(v, 'read') or hasattr(v, 'file'):
+                        safe_update_data[k] = "[File Upload]"
+                    else:
+                        safe_update_data[k] = v
+
                 create_workspace_log(
                     workspace=workspace,
                     user=request.user,
@@ -361,7 +368,7 @@ async def task_detail(request, workspaceId, id):
                     entity_type='task',
                     entity_id=task.id,
                     old_values=old_values,
-                    new_values=update_data,
+                    new_values=safe_update_data,
                     request=request
                 )
 
