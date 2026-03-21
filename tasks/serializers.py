@@ -118,12 +118,28 @@ class TaskCommentCreateSerializer(serializers.ModelSerializer):
                     uploaded_by=user
                 )
         
-        # Create notification for task owner/assignee
+        # Create notification for admins and task assignee synchronously
         from notifications.models import Notification
+        from workspaces.models import WorkspaceMember
+        
         user_name = f"{user.first_name} {user.last_name}".strip() or user.email
+        
+        recipients = set()
         if task.assigned_to and task.assigned_to != user:
+            recipients.add(task.assigned_to)
+            
+        admins = WorkspaceMember.objects.filter(
+            workspace=task.workspace,
+            role__in=['Owner', 'Admin']
+        ).select_related('user')
+        
+        for admin in admins:
+            if admin.user and admin.user != user:
+                recipients.add(admin.user)
+                
+        for recipient in recipients:
             Notification.objects.create(
-                user=task.assigned_to,
+                user=recipient,
                 workspace=task.workspace,
                 action=f"{user_name} commented on: {task.task_name}",
                 description=comment.comment_text[:100],

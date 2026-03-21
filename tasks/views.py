@@ -629,6 +629,33 @@ async def update_task_blocker(request, workspaceId, id):
         )
         
         if blocker_activated_or_updated:
+            from notifications.models import Notification
+            from workspaces.models import WorkspaceMember
+            
+            recipients = set()
+            if task.assigned_to and task.assigned_to != request.user:
+                recipients.add(task.assigned_to)
+                
+            admins = WorkspaceMember.objects.filter(
+                workspace=task.workspace,
+                role__in=['Owner', 'Admin']
+            ).select_related('user')
+            
+            for admin in admins:
+                if admin.user and admin.user != request.user:
+                    recipients.add(admin.user)
+                    
+            trigger_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.email
+            for recipient in recipients:
+                Notification.objects.create(
+                    user=recipient,
+                    workspace=task.workspace,
+                    action=f"Task Blocked: {task.task_name}",
+                    description=f"{trigger_name} set a blocker: {blocker_reason or 'No reason provided'}",
+                    note_type='task_blocked',
+                    severity='error'
+                )
+                
             from .tasks import send_task_blocker_notification
             send_task_blocker_notification.delay(task.id, task.blocker_reason, request.user.id)
             
