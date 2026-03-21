@@ -185,8 +185,6 @@ def send_task_comment_notification(task_id, comment_id):
         if task.assigned_to:
             recipients.add(task.assigned_to)
             
-        if commenter in recipients:
-            recipients.remove(commenter)
             
         if not recipients:
             return "No recipients"
@@ -248,8 +246,6 @@ def send_task_blocker_notification(task_id, blocker_reason, triggered_by_user_id
         if task.assigned_to:
             recipients.add(task.assigned_to)
             
-        if trigger_user and trigger_user in recipients:
-            recipients.remove(trigger_user)
             
         if not recipients:
             return "No recipients"

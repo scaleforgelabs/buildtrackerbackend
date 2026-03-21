@@ -146,6 +146,9 @@ class TaskCommentCreateSerializer(serializers.ModelSerializer):
                 note_type='task_comment',
                 severity='info'
             )
+            
+        from .tasks import send_task_comment_notification
+        send_task_comment_notification.delay(task.id, comment.id)
         
         return comment
 
@@ -190,10 +193,8 @@ class TaskCreateSerializer(serializers.ModelSerializer):
         allow_empty=True,
         write_only=True
     )
-    assigned_to = serializers.UUIDField(required=True, error_messages={
-        'required': 'Task must be assigned to a user',
-        'invalid': 'Task must be assigned to a user',
-        'null': 'Task must be assigned to a user'
+    assigned_to = serializers.UUIDField(required=False, allow_null=True, error_messages={
+        'invalid': 'Please provide a valid user ID'
     })
     
     class Meta:
@@ -206,6 +207,9 @@ class TaskCreateSerializer(serializers.ModelSerializer):
     
     def validate_assigned_to(self, value):
         """Validate that assigned_to user exists and is a workspace member"""
+        if not value:
+            return None
+            
         workspace = self.context['workspace']
         
         try:
@@ -263,7 +267,6 @@ class TaskCreateSerializer(serializers.ModelSerializer):
         # Create notification for assigned user
         from notifications.models import Notification
         assigner_name = f"{user.first_name} {user.last_name}".strip() or user.email
-        assignee_name = f"{task.assigned_to.first_name} {task.assigned_to.last_name}".strip() or task.assigned_to.email
         
         if task.assigned_to:
             log_msg = f"Triggering assignment email for task {task.id} to {task.assigned_to.email}\n"
