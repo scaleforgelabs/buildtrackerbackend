@@ -7,6 +7,7 @@ import traceback
 import sys
 from core.messaging import send_dual_notification
 from .models import Task, TaskComment
+from django.utils.html import strip_tags
 
 @shared_task
 def send_task_assignment_email(task_id):
@@ -22,7 +23,7 @@ def send_task_assignment_email(task_id):
             Priority: {task.get_priority_display()}
             Due Date: {task.end_date or 'Not set'}
             
-            Description: {task.task_description or 'No description provided'}
+            Description: {strip_tags(task.task_description) if task.task_description else 'No description provided'}
             
             View task: {settings.FRONTEND_URL}/{task.workspace.id}/tasks/{task.id}
             """

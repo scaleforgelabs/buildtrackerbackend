@@ -198,6 +198,15 @@ async def workspace_tasks(request, workspaceId):
                 if serializer.is_valid():
                     task = serializer.save()
 
+                    # FAILSAFE: Ensure the status explicitly defaults to what was sent in the payload
+                    # (Bypasses potential REST Framework field omission quirks)
+                    incoming_status = clean_data.get('status')
+                    if incoming_status and incoming_status != task.status:
+                        task.status = incoming_status
+                        if incoming_status == 'completed':
+                            task.percent_complete = 100
+                        task.save()
+
                     create_workspace_log(
                         workspace=workspace,
                         user=request.user,
