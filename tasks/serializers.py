@@ -99,9 +99,12 @@ class TaskCommentCreateSerializer(serializers.ModelSerializer):
         )
         
         # Handle file uploads from request.FILES
-        if hasattr(request, 'FILES') and request.FILES:
+        attachment_files = request.FILES.getlist('attachments') if hasattr(request, 'FILES') and request.FILES else []
+        if not attachment_files and hasattr(request.data, 'getlist'):
+            attachment_files = [f for f in request.data.getlist('attachments') if hasattr(f, 'read')]
+            
+        if attachment_files:
             from utils import validate_file_security
-            attachment_files = request.FILES.getlist('attachments')
             for attachment_file in attachment_files:
                 is_valid, error = validate_file_security(attachment_file)
                 if not is_valid:
