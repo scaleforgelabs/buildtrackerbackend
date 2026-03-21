@@ -70,6 +70,7 @@ class TaskCommentCreateSerializer(serializers.ModelSerializer):
         allow_empty=True,
         write_only=True
     )
+    comment_text = serializers.CharField(required=False, allow_blank=True)
     
     class Meta:
         model = TaskComment

@@ -145,7 +145,12 @@ async def wiki_documents(request, workspaceId):
                         'message': 'Upgrade your plan to upload more files'
                     }, status=status.HTTP_402_PAYMENT_REQUIRED)
 
-            serializer = WikiDocumentCreateSerializer(data=request.data, context={'workspace': workspace, 'request': request})
+            clean_data = {}
+            for key, value in request.data.items():
+                if key != 'attachments' and not hasattr(value, 'read'):
+                    clean_data[key] = value
+
+            serializer = WikiDocumentCreateSerializer(data=clean_data, context={'workspace': workspace, 'request': request})
             if serializer.is_valid():
                 document = serializer.save()
 

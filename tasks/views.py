@@ -344,6 +344,26 @@ async def task_detail(request, workspaceId, id):
 
                 serializer.save()
 
+                # Handle new file uploads
+                attachment_files = request.FILES.getlist('attachments') if hasattr(request, 'FILES') and request.FILES else []
+                if not attachment_files and hasattr(request.data, 'getlist'):
+                    attachment_files = [f for f in request.data.getlist('attachments') if hasattr(f, 'read')]
+                
+                if attachment_files:
+                    from utils import validate_file_security
+                    from .models import TaskAttachment
+                    for attachment_file in attachment_files:
+                        is_valid, error = validate_file_security(attachment_file)
+                        if not is_valid:
+                            return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+                            
+                        TaskAttachment.objects.create(
+                            task=task,
+                            file=attachment_file,
+                            file_name=attachment_file.name,
+                            uploaded_by=request.user
+                        )
+
                 if 'assigned_to' in update_data and old_assigned_to != task.assigned_to:
                     if task.assigned_to:
                         send_task_assignment_email.delay(task.id)
@@ -756,7 +776,12 @@ async def task_comments(request, workspaceId, taskId):
             })
 
         elif request.method == 'POST':
-            serializer = TaskCommentCreateSerializer(data=request.data, context={'task': task, 'request': request})
+            clean_data = {}
+            for key, value in request.data.items():
+                if key != 'attachments' and not hasattr(value, 'read'):
+                    clean_data[key] = value
+
+            serializer = TaskCommentCreateSerializer(data=clean_data, context={'task': task, 'request': request})
             if serializer.is_valid():
                 comment = serializer.save()
 
