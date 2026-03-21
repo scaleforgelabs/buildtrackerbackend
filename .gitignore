@@ -14,3 +14,4 @@ staticfiles/
 .idea/
 .vscode/
 .DS_Store
+task_email_debug.log
