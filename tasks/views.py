@@ -366,10 +366,12 @@ async def task_detail(request, workspaceId, id):
 
                 if 'assigned_to' in update_data and old_assigned_to != task.assigned_to:
                     if task.assigned_to:
-                        send_task_assignment_email.delay(task.id)
+                        from django.db import transaction
+                        transaction.on_commit(lambda x=task.id: send_task_assignment_email.delay(str(x)))
 
                 if 'status' in update_data and old_status != task.status:
-                    send_task_status_update_email.delay(task.id, old_status, task.status)
+                    from django.db import transaction
+                    transaction.on_commit(lambda x=task.id, o=old_status, n=task.status: send_task_status_update_email.delay(str(x), o, n))
 
                 safe_update_data = {}
                 for k, v in update_data.items():
@@ -503,7 +505,8 @@ async def update_task_status(request, workspaceId, id):
         task.save()
 
         if status_value and old_status != task.status:
-            send_task_status_update_email.delay(task.id, old_status, task.status)
+            from django.db import transaction
+            transaction.on_commit(lambda x=task.id, o=old_status, n=task.status: send_task_status_update_email.delay(str(x), o, n))
 
             create_workspace_log(
                 workspace=workspace,
@@ -560,7 +563,8 @@ async def assign_task(request, workspaceId, id):
             task.save()
 
             if task.assigned_to:
-                send_task_assignment_email.delay(task.id)
+                from django.db import transaction
+                transaction.on_commit(lambda x=task.id: send_task_assignment_email.delay(str(x)))
 
         return Response({'task': TaskSerializer(task).data})
 
@@ -657,7 +661,8 @@ async def update_task_blocker(request, workspaceId, id):
                 )
                 
             from .tasks import send_task_blocker_notification
-            send_task_blocker_notification.delay(task.id, task.blocker_reason, request.user.id)
+            from django.db import transaction
+            transaction.on_commit(lambda x=task.id, b=task.blocker_reason, u=request.user.id: send_task_blocker_notification.delay(str(x), b, str(u)))
             
         return Response({'task': TaskSerializer(task).data})
 

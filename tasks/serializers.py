@@ -148,7 +148,8 @@ class TaskCommentCreateSerializer(serializers.ModelSerializer):
             )
             
         from .tasks import send_task_comment_notification
-        send_task_comment_notification.delay(task.id, comment.id)
+        from django.db import transaction
+        transaction.on_commit(lambda: send_task_comment_notification.delay(str(task.id), str(comment.id)))
         
         return comment
 
@@ -282,8 +283,9 @@ class TaskCreateSerializer(serializers.ModelSerializer):
                 severity='info'
             )
             
-            # Send email notification
-            send_task_assignment_email.delay(task.id)
+            # Send email notification after transaction commits
+            from django.db import transaction
+            transaction.on_commit(lambda x=task.id: send_task_assignment_email.delay(str(x)))
         
         return task
 

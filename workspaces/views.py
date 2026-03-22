@@ -189,7 +189,8 @@ async def workspaces_list_create(request):
 
 
                 from .tasks import send_workspace_creation_email
-                send_workspace_creation_email.delay(str(workspace.id))
+                from django.db import transaction
+                transaction.on_commit(lambda x=workspace.id: send_workspace_creation_email.delay(str(x)))
 
                 return Response(
                     {'workspace': WorkspaceSerializer(workspace, context={'request': request}).data},
