@@ -372,6 +372,13 @@ async def task_detail(request, workspaceId, id):
                 if 'status' in update_data and old_status != task.status:
                     from django.db import transaction
                     transaction.on_commit(lambda x=task.id, o=old_status, n=task.status: send_task_status_update_email.delay(str(x), o, n))
+                    
+                other_updated_fields = [k for k in update_data.keys() if k not in ['status', 'assigned_to']]
+                if other_updated_fields:
+                    updater_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.email
+                    from django.db import transaction
+                    from .tasks import send_task_general_update_email
+                    transaction.on_commit(lambda x=task.id, f=other_updated_fields, un=updater_name: send_task_general_update_email.delay(str(x), f, un))
 
                 safe_update_data = {}
                 for k, v in update_data.items():
@@ -427,8 +434,17 @@ async def task_detail(request, workspaceId, id):
 
             task_name = task.task_name
             task_id = task.id
+            workspace_name = workspace.name
+            assignee_id = str(task.assigned_to.id) if task.assigned_to else None
+            creator_id = str(task.created_by.id) if task.created_by else None
+            deleter_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.email
+            
             old_values = {'task_name': task.task_name, 'priority': task.priority, 'status': task.status}
             task.delete()
+            
+            from django.db import transaction
+            from .tasks import send_task_deletion_email
+            transaction.on_commit(lambda tn=task_name, wn=workspace_name, a=assignee_id, c=creator_id, dn=deleter_name: send_task_deletion_email.delay(tn, wn, a, c, dn))
 
             create_workspace_log(
                 workspace=workspace,

@@ -107,6 +107,68 @@ def send_task_due_reminder_email(task_id):
         return f"Task {task_id} not found"
 
 @shared_task
+def send_task_general_update_email(task_id, updated_fields, updater_name):
+    try:
+        task = Task.objects.get(id=task_id)
+        
+        subject = f"Task Updated: {task.task_name}"
+        fields_str = ", ".join(updated_fields)
+        message = f"""
+        A task has been updated in {task.workspace.name} by {updater_name}.
+        
+        Task: {task.task_name}
+        Updated Fields: {fields_str}
+        
+        View task: {settings.FRONTEND_URL}/{task.workspace.id}/tasks/{task.id}
+        """
+        
+        if task.created_by:
+            send_dual_notification(task.created_by, subject, message, fail_silently=True)
+            
+        if task.assigned_to and task.assigned_to != task.created_by:
+            send_dual_notification(task.assigned_to, subject, message, fail_silently=True)
+            
+        return f"General update email sent for task {task.task_name}"
+    except Task.DoesNotExist:
+        return f"Task {task_id} not found"
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+@shared_task
+def send_task_deletion_email(task_name, workspace_name, assigned_to_id, created_by_id, deleter_name):
+    try:
+        from auth_func.models import CustomUser
+        
+        subject = f"Task Deleted: {task_name}"
+        message = f"""
+        A task has been deleted in {workspace_name} by {deleter_name}.
+        
+        Task: {task_name}
+        This task is no longer available.
+        """
+        
+        try:
+            creator = CustomUser.objects.get(id=created_by_id) if created_by_id else None
+        except CustomUser.DoesNotExist:
+            creator = None
+            
+        try:
+            assignee = CustomUser.objects.get(id=assigned_to_id) if assigned_to_id else None
+        except CustomUser.DoesNotExist:
+            assignee = None
+        
+        if creator:
+            send_dual_notification(creator, subject, message, fail_silently=True)
+            
+        if assignee and assignee != creator:
+            send_dual_notification(assignee, subject, message, fail_silently=True)
+            
+        return f"Deletion email sent for task {task_name}"
+    except Exception as e:
+        import traceback
+        return f"Error: {traceback.format_exc()}"
+
+@shared_task
 def update_workspace_task_count(workspace_id):
     try:
         from workspaces.models import Workspace
