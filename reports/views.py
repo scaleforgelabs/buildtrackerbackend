@@ -6,10 +6,7 @@ from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.shortcuts import get_object_or_404
-from django.db.models import Q, Count, Avg, Sum, F
 from django.utils import timezone
-from django.core.cache import cache
-from django.http import HttpResponse
 from drf_spectacular.utils import extend_schema
 from datetime import datetime, timedelta
 from cachalot.api import cachalot_disabled
@@ -19,12 +16,11 @@ import secrets
 from .models import Report, ReportTemplate, ScheduledReport, SharedReport
 from .serializers import (
     ReportSerializer, ReportGenerateSerializer, PersonalReportGenerateSerializer,
-    ReportTemplateSerializer, ScheduledReportSerializer, SharedReportSerializer,
-    ReportShareSerializer, ReportDataSerializer, PerformanceSummarySerializer
+    ReportTemplateSerializer, ScheduledReportSerializer, ReportShareSerializer
 )
 from workspaces.models import Workspace, WorkspaceMember
 from tasks.models import Task
-from utils import sanitize_input, check_workspace_permission
+from utils import check_workspace_permission
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
@@ -246,7 +242,7 @@ async def export_report(request, workspaceId, id):
             return Response({'error': 'Permission denied: You must be a member of this workspace'}, status=status.HTTP_403_FORBIDDEN)
 
         format_type = request.GET.get('Format', 'json').lower()
-        include_charts = request.GET.get('IncludeCharts', 'false').lower() == 'true'
+
 
         download_url = f"/api/files/reports/{report.id}.{format_type}"
         expires_at = timezone.now() + timedelta(hours=24)

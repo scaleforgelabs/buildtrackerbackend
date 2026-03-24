@@ -5,15 +5,14 @@ from rest_framework.decorators import permission_classes
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.db.models import Count, Avg
+from django.db.models import Count
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 from datetime import datetime, timedelta
 
 from .models import DashboardWidget, WidgetLayout
 from .serializers import (
-    DashboardWidgetSerializer, WidgetLayoutSerializer, 
-    UserDashboardSerializer, UpdateDashboardSerializer, WidgetDataSerializer
+    DashboardWidgetSerializer, WidgetLayoutSerializer
 )
 from auth_func.models import CustomUser
 from workspaces.models import Workspace, WorkspaceMember
@@ -118,7 +117,7 @@ def get_widget_data(widget_type, workspace, date_from=None, date_to=None):
             'completed': tasks.filter(status='completed').count(),
             'in_progress': tasks.filter(status='in_progress').count(),
             'pending': tasks.filter(status='pending').count(),
-            'blocked': tasks.filter(status='blocked').count()
+            'blocked': tasks.filter(has_blocker=True).count()
         }
     
     elif widget_type == 'recent_tasks':
@@ -184,15 +183,16 @@ def get_widget_data(widget_type, workspace, date_from=None, date_to=None):
         return [{'status': s['status'], 'count': s['count']} for s in statuses]
     
     elif widget_type == 'overdue_tasks':
+        now = timezone.now()
         overdue = tasks.filter(
-            end_date__lt=timezone.now().date(),
+            end_date__lt=now,
             status__in=['pending', 'in_progress']
         ).order_by('end_date')[:10]
         return [{
             'id': str(task.id),
             'title': task.task_name,
-            'end_date': task.end_date.isoformat(),
-            'days_overdue': (timezone.now().date() - task.end_date).days
+            'end_date': task.end_date.isoformat() if task.end_date else None,
+            'days_overdue': (now - task.end_date).days if task.end_date else 0
         } for task in overdue]
     
     elif widget_type == 'completion_trend':

@@ -2,9 +2,7 @@ from celery import shared_task
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
-from datetime import timedelta
 import traceback
-import sys
 from core.messaging import send_dual_notification
 from .models import Task, TaskComment
 from django.utils.html import strip_tags
@@ -73,7 +71,7 @@ def send_task_status_update_email(task_id, old_status, new_status):
     except Task.DoesNotExist:
         return f"Task {task_id} not found"
     except Exception as e:
-        error_trace = traceback.format_exc()
+        print(f"Error checking blockers: {traceback.format_exc()}")
         return f"Error: {str(e)}"
 
 @shared_task
@@ -164,7 +162,7 @@ def send_task_deletion_email(task_name, workspace_name, assigned_to_id, created_
             send_dual_notification(assignee, subject, message, fail_silently=True)
             
         return f"Deletion email sent for task {task_name}"
-    except Exception as e:
+    except Exception:
         import traceback
         return f"Error: {traceback.format_exc()}"
 
@@ -178,7 +176,7 @@ def update_workspace_task_count(workspace_id):
         workspace.save()
         
         return f"Updated task count for workspace {workspace.name}: {task_count}"
-    except:
+    except Exception:
         return f"Failed to update task count for workspace {workspace_id}"
 
 @shared_task

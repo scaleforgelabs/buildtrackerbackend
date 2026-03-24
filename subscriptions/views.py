@@ -6,14 +6,13 @@ from rest_framework.response import Response
 from adrf import generics, views
 from django.conf import settings
 from django.utils import timezone
-from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 import uuid
 import requests
 
 from .models import Subscription, PaymentHistory, PaymentMethod
 from organizations.models import Organization, OrganizationMembership
-from .serializers import PlanSerializer, SubscriptionSerializer, InitiateSubscriptionSerializer, VerifyPaymentSerializer
+from .serializers import PlanSerializer, InitiateSubscriptionSerializer, VerifyPaymentSerializer
 from .utils import verify_paystack_transaction, verify_flutterwave_transaction, verify_flutterwave_transaction_by_reference, get_plan_price
 
 
@@ -197,8 +196,7 @@ class InitiateSubscriptionView(generics.GenericAPIView):
             callback_url = serializer.validated_data.get('callback_url', settings.FRONTEND_URL + '/billing/callback')
 
             try:
-                existing_subscription = Subscription.objects.get(organization=organization)
-                current_plan = existing_subscription.plan_type
+                Subscription.objects.get(organization=organization)
             except Subscription.DoesNotExist:
                 pass
             

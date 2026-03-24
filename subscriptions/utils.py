@@ -1,6 +1,5 @@
 import requests
 from django.conf import settings
-from rest_framework.exceptions import ValidationError
 import hmac
 import hashlib
 
@@ -50,7 +49,7 @@ def verify_paystack_transaction(reference):
         "Content-Type": "application/json",
     }
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=10)
         if response.status_code == 200:
             data = response.json()
             if data['status'] is True and data['data']['status'] == 'success':
@@ -71,7 +70,7 @@ def charge_paystack_authorization(amount, email, authorization_code):
         "authorization_code": authorization_code
     }
     try:
-        response = requests.post(url, headers=headers, json=data)
+        response = requests.post(url, headers=headers, json=data, timeout=10)
         if response.status_code == 200:
             res_data = response.json()
             if res_data['status'] is True and res_data['data']['status'] == 'success':
@@ -88,7 +87,7 @@ def verify_flutterwave_transaction(transaction_id):
         "Content-Type": "application/json",
     }
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=10)
         
         if response.status_code == 200:
             data = response.json()
@@ -105,7 +104,7 @@ def verify_flutterwave_transaction_by_reference(tx_ref):
         "Content-Type": "application/json",
     }
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=10)
         
         if response.status_code == 200:
             data = response.json()
@@ -191,7 +190,7 @@ def charge_flutterwave_token(amount, email, token, currency='NGN', tx_ref=None):
         "redirect_url": "https://google.com"
     }
     try:
-        response = requests.post(url, headers=headers, json=data)
+        response = requests.post(url, headers=headers, json=data, timeout=10)
         res_data = response.json()
         if response.status_code == 200 and res_data['status'] == 'success':
              return True, res_data['data']

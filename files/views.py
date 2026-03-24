@@ -6,15 +6,13 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.shortcuts import get_object_or_404
-from django.db.models import Q, Sum
-from django.http import HttpResponse, Http404
+from django.http import Http404
 from drf_spectacular.utils import extend_schema
 from datetime import datetime
-import os
 
 from .models import File, Folder
 from .serializers import FileSerializer, FileUploadSerializer, FolderSerializer, FolderCreateSerializer
-from workspaces.models import Workspace, WorkspaceMember
+from workspaces.models import Workspace
 from utils import sanitize_input, check_storage_limit, check_workspace_permission
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -342,7 +340,7 @@ async def upload_to_folder(request, workspaceId, folderId):
                 'message': 'Upgrade your plan to upload more files'
             }, status=status.HTTP_402_PAYMENT_REQUIRED)
 
-        serializer = FileUploadSerializer(data={'file': uploaded_file, 'folder': folderId}, context={'request': request, 'workspace': workspace})
+        serializer = FileUploadSerializer(data={'file': uploaded_file, 'folder': folder.id}, context={'request': request, 'workspace': workspace})
         if serializer.is_valid():
             file_obj = serializer.save()
             cache_key = f'user_usage_{workspace.owner.id}'

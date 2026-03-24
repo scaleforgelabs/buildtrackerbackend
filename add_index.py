@@ -1,10 +1,9 @@
-import os
 import glob
-import re
 
 count = 0
 for filepath in glob.glob("**/*/models.py", recursive=True):
-    if 'venv' in filepath: continue
+    if 'venv' in filepath:
+        continue
     with open(filepath, 'r', encoding='utf-8') as f:
         content = f.read()
 

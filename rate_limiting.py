@@ -1,7 +1,6 @@
 from functools import wraps
 from django.core.cache import cache
 from django.http import JsonResponse
-from rest_framework import status
 
 
 # Error code constants
@@ -37,7 +36,7 @@ def get_error_response(code, custom_message=None):
     )
 
 
-from asgiref.sync import iscoroutinefunction
+from asgiref.sync import iscoroutinefunction  # noqa: E402
 
 def rate_limit(requests_per_minute=60):
     """

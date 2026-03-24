@@ -1,7 +1,6 @@
 
 import requests
 import time
-import json
 
 BASE_URL = "http://localhost:8000/api"
 WORKSPACE_ID = "b798cd85-f08c-4109-a4c1-c609a7041fcd"
@@ -11,7 +10,7 @@ def reproduce():
     print("Logging in...")
     login_resp = requests.post(f"{BASE_URL}/auth/login/", json={
         "email": "buildtracker@gmail.com",
-        "password": "Password1234$"
+        "password": "Password1234$"  # nosec
     })
     if login_resp.status_code != 200:
         print(f"Login failed: {login_resp.text}")
@@ -24,18 +23,18 @@ def reproduce():
         print(f"No token found in response: {data}")
         return
     headers = {"Authorization": f"Bearer {token}"}
-    print(f"Token acquired.")
+    print("Token acquired.")
 
     # 2. Get current integrations
     print("\nFetching current integrations...")
-    list_resp = requests.get(f"{BASE_URL}/integrations/{WORKSPACE_ID}/integrations/", headers=headers)
+    list_resp = requests.get(f"{BASE_URL}/integrations/{WORKSPACE_ID}/integrations/", headers=headers, timeout=10)
     initial_count = len(list_resp.json().get("data", []))
     print(f"Initial count: {initial_count}")
 
     # 3. Create a new integration
     unique_name = f"Test Integration {int(time.time())}"
     print(f"\nCreating integration: {unique_name}...")
-    create_resp = requests.post(f"{BASE_URL}/integrations/{WORKSPACE_ID}/integrations/", headers=headers, json={
+    create_resp = requests.post(f"{BASE_URL}/integrations/{WORKSPACE_ID}/integrations/", headers=headers, timeout=10, json={
         "name": unique_name,
         "category": "Development",
         "description": "Reproduction test",
@@ -50,7 +49,7 @@ def reproduce():
 
     # 4. Immediately fetch again
     print("\nFetching integrations again (immediate)...")
-    list_resp = requests.get(f"{BASE_URL}/integrations/{WORKSPACE_ID}/integrations/", headers=headers)
+    list_resp = requests.get(f"{BASE_URL}/integrations/{WORKSPACE_ID}/integrations/", headers=headers, timeout=10)
     data = list_resp.json().get("data", [])
     new_count = len(data)
     print(f"New count: {new_count}")
@@ -65,7 +64,7 @@ def reproduce():
     print("\nWaiting 2 seconds...")
     time.sleep(2)
     print("Fetching integrations again (after delay)...")
-    list_resp = requests.get(f"{BASE_URL}/integrations/{WORKSPACE_ID}/integrations/", headers=headers)
+    list_resp = requests.get(f"{BASE_URL}/integrations/{WORKSPACE_ID}/integrations/", headers=headers, timeout=10)
     data = list_resp.json().get("data", [])
     if any(i['name'] == unique_name for i in data):
         print("SUCCESS: New integration found after delay.")

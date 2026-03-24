@@ -4,21 +4,17 @@ from rest_framework import status, permissions
 from rest_framework.decorators import permission_classes
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from django.db.models import Q, Count, Avg, Sum, F, Case, When, IntegerField
+from django.db.models import Q, Count
 from django.utils import timezone
 from django.core.cache import cache
 from drf_spectacular.utils import extend_schema
 from datetime import datetime, timedelta
 from cachalot.api import cachalot_disabled
 
-from .serializers import (
-    DashboardStatsSerializer, DashboardChartsSerializer, PerformanceAnalyticsSerializer,
-    TrendsAnalyticsSerializer
-)
 from django.db.models.functions import TruncDate
 from workspaces.models import Workspace, WorkspaceMember
 from tasks.models import Task
-from utils import sanitize_input, check_workspace_permission, cache_lock
+from utils import check_workspace_permission, cache_lock
 
 def get_dashboard_stats(workspace, date_from=None, date_to=None, milestone=None, sprint=None, bypass_cache=False):
     version_key = f"workspace_analytics_version_{workspace.id}"
@@ -51,8 +47,8 @@ def get_dashboard_stats(workspace, date_from=None, date_to=None, milestone=None,
     total_tasks = tasks.count()
     completed_tasks = tasks.filter(status='completed').count()
     in_progress_tasks = tasks.filter(status='in_progress').count()
-    overdue_tasks = tasks.filter(end_date__lt=timezone.now().date(), status__in=['pending', 'in_progress']).count()
-    blocked_tasks = tasks.filter(status='blocked').count()
+    overdue_tasks = tasks.filter(end_date__lt=timezone.now(), status__in=['pending', 'in_progress']).count()
+    blocked_tasks = tasks.filter(has_blocker=True).count()
     
     total_members = WorkspaceMember.objects.filter(workspace=workspace).count()
     
@@ -175,7 +171,7 @@ def get_dashboard_charts(workspace, period='monthly', milestone=None, date_from=
         completed=Count('id', filter=Q(status='completed')),
         pending=Count('id', filter=Q(status='pending')),
         in_progress=Count('id', filter=Q(status='in_progress')),
-        overdue=Count('id', filter=Q(end_date__lt=timezone.now().date(), status__in=['pending', 'in_progress']))
+        overdue=Count('id', filter=Q(end_date__lt=timezone.now(), status__in=['pending', 'in_progress']))
     )
     for stat in tasks_assigned_counts:
         user_stats[stat['assigned_to']] = stat
@@ -283,12 +279,12 @@ def get_performance_analytics(workspace, date_from=None, date_to=None, bypass_ca
     else:
         average_task_time = 0
     
-    blocked_tasks = tasks.filter(status='blocked').count()
+    blocked_tasks = tasks.filter(has_blocker=True).count()
     blocked_rate = (blocked_tasks / max(total_tasks, 1)) * 100
     team_efficiency = round(max(0, completion_rate - blocked_rate), 1)
     
     bottlenecks = []
-    overdue_count = tasks.filter(end_date__lt=timezone.now().date(), status__in=['pending', 'in_progress']).count()
+    overdue_count = tasks.filter(end_date__lt=timezone.now(), status__in=['pending', 'in_progress']).count()
     if overdue_count > total_tasks * 0.2:
         overdue_rate = (overdue_count / max(total_tasks, 1)) * 100
         impact_score = min(10, overdue_rate / 10)
@@ -299,7 +295,7 @@ def get_performance_analytics(workspace, date_from=None, date_to=None, bypass_ca
             'impact_score': round(impact_score, 1)
         })
     
-    blocked_count = tasks.filter(status='blocked').count()
+    blocked_count = tasks.filter(has_blocker=True).count()
     if blocked_count > 0:
         blocked_rate = (blocked_count / max(total_tasks, 1)) * 100
         impact_score = min(10, blocked_rate / 10)

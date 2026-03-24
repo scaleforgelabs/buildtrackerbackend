@@ -43,7 +43,6 @@ def check_approaching_deadlines():
 @shared_task
 def send_daily_task_summary():
     """Send daily summary of tasks to workspace members"""
-    from django.db.models import Count, Q
     
     workspaces = WorkspaceMember.objects.values_list('workspace', flat=True).distinct()
     

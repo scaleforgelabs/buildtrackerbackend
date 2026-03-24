@@ -5,7 +5,7 @@ from rest_framework.decorators import permission_classes
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.shortcuts import get_object_or_404
-from django.db.models import Count, Q, Avg, Max
+from django.db.models import Count, Q, Avg
 from django.utils import timezone
 from django.core.cache import cache
 from drf_spectacular.utils import extend_schema
@@ -14,8 +14,14 @@ import uuid
 
 from django.db.models.functions import TruncDate
 from .models import WorkspaceLog, AuditTrailLog, UserActivityLog, SystemEventLog
-from .serializers import *
-from workspaces.models import Workspace, WorkspaceMember
+from .serializers import (
+    WorkspaceLogSerializer, 
+    AuditTrailLogSerializer, 
+    UserActivityLogSerializer, 
+    SystemEventLogSerializer, 
+    LogExportSerializer
+)
+from workspaces.models import Workspace
 from utils import sanitize_input, check_workspace_permission
 
 class StandardResultsSetPagination(PageNumberPagination):

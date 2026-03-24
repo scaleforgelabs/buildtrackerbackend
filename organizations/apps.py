@@ -5,4 +5,4 @@ class OrganizationsConfig(AppConfig):
     name = 'organizations'
     
     def ready(self):
-        import organizations.signals
+        pass

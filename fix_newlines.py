@@ -1,4 +1,3 @@
-import os
 import glob
 
 def fix_file(filepath):
@@ -12,7 +11,7 @@ def fix_file(filepath):
     # But ONLY if it's not already preceded by a newline.
     
     modified = False
-    new_content = ""
+
     lines = content.split('\n')
     out_lines = []
     
@@ -36,6 +35,7 @@ def fix_file(filepath):
 
 if __name__ == '__main__':
     for p in glob.glob("**/*/views.py", recursive=True) + glob.glob("**/*/views/*.py", recursive=True):
-        if 'venv' in p: continue
+        if 'venv' in p:
+            continue
         fix_file(p)
     print("Fix done")

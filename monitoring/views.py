@@ -4,7 +4,7 @@ from rest_framework import status, permissions
 from rest_framework.decorators import permission_classes
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from django.db.models import Avg, Sum, Count, Max, Min
+from django.db.models import Avg, Sum, Max
 from django.utils import timezone
 from django.core.cache import cache
 from django.db import connection
@@ -13,15 +13,11 @@ from datetime import datetime, timedelta
 import psutil
 import time
 
-from .models import SystemMetric, SystemAlert, UsageMetric
+from .models import SystemMetric, SystemAlert
 from .serializers import (
-    SystemMetricSerializer, SystemAlertSerializer, SystemHealthSerializer,
-    AggregatedMetricsSerializer, DetailedUsageSerializer, UsageTrendSerializer,
-    CostBreakdownSerializer, OptimizationSuggestionSerializer
+    SystemMetricSerializer, SystemAlertSerializer
 )
-from workspaces.models import Workspace, WorkspaceMember
-from tasks.models import Task
-from files.models import File
+from workspaces.models import Workspace
 from utils import check_workspace_permission
 
 def check_admin_permission(user, workspace):
@@ -185,7 +181,6 @@ def get_cost_breakdown(user):
 
 def get_optimization_suggestions(user):
     """Get optimization suggestions for user"""
-    from organizations.user_org_views import get_plan_limits
     usage_data = get_organization_usage_data(user, timezone.now().date() - timedelta(days=30), timezone.now().date())
     suggestions = []
     

@@ -1,16 +1,14 @@
 from adrf.decorators import api_view
 from asgiref.sync import sync_to_async
 from rest_framework.decorators import permission_classes, parser_classes
-from rest_framework.permissions import *
+
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
-from django.contrib.auth import authenticate
 from rest_framework import permissions
-from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth import get_user_model
 from drf_spectacular.utils import extend_schema
 from utils import sanitize_input, validate_password
-import json
 
 User = get_user_model()
 

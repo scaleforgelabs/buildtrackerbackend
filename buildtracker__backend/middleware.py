@@ -1,8 +1,6 @@
 import traceback
 import time
 from django.utils.deprecation import MiddlewareMixin
-from rest_framework.response import Response
-from rest_framework import status
 from utils import create_system_event_log, create_user_activity_log
 
 
@@ -52,8 +50,8 @@ class ExceptionLoggingMiddleware(MiddlewareMixin):
                 metadata={
                     'method': request.method,
                     'user': str(request.user) if hasattr(request, 'user') else 'Anonymous',
-                    'ip_address': request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR')),
-                    'user_agent': request.META.get('HTTP_USER_AGENT', '')
+                    'ip_address': request.headers.get('x-forwarded-for', request.META.get('REMOTE_ADDR')),
+                    'user_agent': request.headers.get('user-agent', '')
                 }
             )
         except Exception as log_error:
@@ -144,8 +142,8 @@ class APIUsageTrackingMiddleware(MiddlewareMixin):
                         workspace=workspace,
                         module_name=module,
                         session_duration=duration_ms // 1000 if duration_ms else 0,
-                        ip_address=request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR')),
-                        user_agent=request.META.get('HTTP_USER_AGENT', '')
+                        ip_address=request.headers.get('x-forwarded-for', request.META.get('REMOTE_ADDR')),
+                        user_agent=request.headers.get('user-agent', '')
                     )
         except Exception as log_error:
             # Don't let logging errors break the application
@@ -153,9 +151,9 @@ class APIUsageTrackingMiddleware(MiddlewareMixin):
         
         return response
 
-import contextvars
-from django.db.backends.utils import CursorWrapper
-from asgiref.sync import iscoroutinefunction, markcoroutinefunction
+import contextvars  # noqa: E402
+from django.db.backends.utils import CursorWrapper  # noqa: E402
+from asgiref.sync import iscoroutinefunction  # noqa: E402
 
 # Global context var to track queries per request regardless of threads
 query_count_var = contextvars.ContextVar('query_count', default=0)
@@ -184,7 +182,7 @@ if not hasattr(CursorWrapper, '_patched_for_counting'):
     CursorWrapper._patched_for_counting = True
 
 
-from django.utils.decorators import sync_and_async_middleware
+from django.utils.decorators import sync_and_async_middleware  # noqa: E402
 
 @sync_and_async_middleware
 def QueryAndTimingMiddleware(get_response):

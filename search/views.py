@@ -5,11 +5,10 @@ from rest_framework.decorators import permission_classes
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.shortcuts import get_object_or_404
-from django.db.models import Q, Case, When, IntegerField
+from django.db.models import Q
 from drf_spectacular.utils import extend_schema
 from itertools import chain
 
-from .serializers import SearchResultSerializer, SearchCategoriesSerializer
 from tasks.models import Task
 from wiki.models import WikiDocument
 from integrations.models import Integration
@@ -73,7 +72,7 @@ def search_tasks(search_key, workspaces, workspace_filter=None, milestone=None, 
             'created_at': task.created_at,
             'updated_at': task.updated_at,
             'relevance_score': 1.0,
-            'url': f'/tasks'
+            'url': '/tasks'
         })
     
     return results
@@ -165,7 +164,7 @@ def search_team(search_key, workspaces, workspace_filter=None):
             'created_at': member.joined_at,
             'updated_at': member.joined_at,
             'relevance_score': 1.0,
-            'url': f'/team'
+            'url': '/team'
         })
     
     return results
@@ -204,7 +203,7 @@ def search_quicklinks(search_key, workspaces, workspace_filter=None):
             'created_at': ql.created_at,
             'updated_at': ql.updated_at,
             'relevance_score': 1.0,
-            'url': f'/quick-links'
+            'url': '/quick-links'
         })
     for sq in shared_queryset:
         results.append({
@@ -217,7 +216,7 @@ def search_quicklinks(search_key, workspaces, workspace_filter=None):
             'created_at': sq.created_at,
             'updated_at': sq.updated_at,
             'relevance_score': 1.0,
-            'url': f'/quick-links'
+            'url': '/quick-links'
         })
     
     return results
@@ -246,7 +245,7 @@ def search_logs(search_key, workspaces, workspace_filter=None):
             'created_at': log.created_at,
             'updated_at': log.created_at,
             'relevance_score': 0.8,
-            'url': f'/activity-logs'
+            'url': '/activity-logs'
         })
     
     return results
@@ -322,7 +321,7 @@ def search_notifications(search_key, workspaces, workspace_filter=None):
             'created_at': notif.created_at,
             'updated_at': notif.created_at,
             'relevance_score': 0.7,
-            'url': f'/notifications'
+            'url': '/notifications'
         })
     
     return results
@@ -373,7 +372,7 @@ async def global_search(request):
         elif sort_column == 'updated_at':
             all_results.sort(key=lambda x: x['updated_at'], reverse=True)
 
-        paginator = StandardResultsSetPagination()
+
         page_size = int(request.GET.get('PageSize', 20))
         page = int(request.GET.get('Page', 1))
 
@@ -482,7 +481,7 @@ async def workspace_search(request, workspaceId):
 
         results.sort(key=lambda x: x['relevance_score'], reverse=True)
 
-        paginator = StandardResultsSetPagination()
+
         page_size = int(request.GET.get('PageSize', 10))
         page = int(request.GET.get('Page', 1))
 

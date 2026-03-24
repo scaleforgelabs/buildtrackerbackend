@@ -1,6 +1,5 @@
 from rest_framework import serializers
 from .models import Subscription, PaymentHistory
-from organizations.models import Organization
 
 class PlanSerializer(serializers.Serializer):
     type = serializers.CharField()

@@ -7,18 +7,17 @@ from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
-from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from datetime import datetime
 
-from .models import Task, TaskComment, TaskAttachment, TaskCommentAttachment, PersonalTask
+from .models import Task, TaskComment, TaskCommentAttachment, PersonalTask
 from .serializers import (
     TaskSerializer, TaskCreateSerializer, TaskCommentSerializer, 
     TaskAttachmentSerializer, TaskCommentCreateSerializer, PersonalTaskSerializer
 )
 from .tasks import send_task_assignment_email, send_task_status_update_email
-from workspaces.models import Workspace, WorkspaceMember
-from utils import sanitize_input, check_workspace_permission, create_workspace_log, create_audit_log, create_user_activity_log, create_system_event_log
+from workspaces.models import Workspace
+from utils import sanitize_input, check_workspace_permission, create_workspace_log, create_audit_log, create_user_activity_log
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 25

@@ -5,4 +5,4 @@ class WorkspacesConfig(AppConfig):
     name = 'workspaces'
     
     def ready(self):
-        import workspaces.signals
+        pass

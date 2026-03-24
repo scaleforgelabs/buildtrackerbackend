@@ -1,5 +1,4 @@
 from rest_framework import serializers
-from rest_framework import serializers
 from .models import Task, TaskComment, TaskAttachment, TaskCommentAttachment, PersonalTask
 from django.contrib.auth import get_user_model
 from .tasks import send_task_assignment_email

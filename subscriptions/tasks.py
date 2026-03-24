@@ -24,7 +24,7 @@ def process_subscriptions_task():
 
 @shared_task
 def process_paystack_webhook_task(event, data):
-    from .models import PaymentHistory, Subscription, PaymentMethod
+    from .models import PaymentHistory, Subscription
     
     if event == 'charge.success':
         reference = data.get('reference')
@@ -162,6 +162,7 @@ def process_flutterwave_webhook_task(event, data):
                 card_first6 = fw_card.get('first_6digits')
                 card_expiry = fw_card.get('expiry')
                 
+                organization = payment.organization
                 new_plan = payment.plan_type
                 existing_sub = Subscription.objects.filter(organization=organization).first()
                 
@@ -192,7 +193,7 @@ def process_flutterwave_webhook_task(event, data):
                         'grace_period_end': new_end_date + timezone.timedelta(days=3),
                         'authorization_code': auth_code,
                         'subscription_code': sub_code,
-                        'email_token': None,
+                        'email_token': None,  # nosec
                         'billing_email': billing_email,
                         'cancel_at_period_end': False,
                         'next_plan_type': None,

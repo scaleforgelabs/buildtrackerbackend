@@ -1,4 +1,3 @@
-import os
 
 filepath = r"c:\Users\USER\OneDrive\Desktop\coding\buildtracker_project\buildtracker_backend\buildtracker__backend\subscriptions\views.py"
 

@@ -7,8 +7,8 @@ sys.path.append('c:\\Users\\USER\\OneDrive\\Desktop\\coding\\buildtracker_projec
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'buildtracker__backend.settings')
 django.setup()
 
-from tasks.models import Task, TaskComment
-from tasks.tasks import send_task_comment_notification
+from tasks.models import TaskComment  # noqa: E402
+from tasks.tasks import send_task_comment_notification  # noqa: E402
 
 comment = TaskComment.objects.last()
 if not comment:

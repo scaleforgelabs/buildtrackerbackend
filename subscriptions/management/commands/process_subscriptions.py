@@ -112,7 +112,7 @@ class Command(BaseCommand):
             
             if not sub.authorization_code:
                 # No card on file? Enter grace period immediately
-                self.stdout.write(f"  -> No authorization code, entering grace period")
+                self.stdout.write("  -> No authorization code, entering grace period")
                 self.enter_grace_period(sub)
                 continue
 
@@ -184,7 +184,7 @@ class Command(BaseCommand):
                     self.send_notification(
                         sub,
                         f"Payment Retry Failed (Attempt {sub.retry_count}/3)",
-                        f"We attempted to charge your card but it failed. We will retry in 2 days. Please update your payment method to avoid service interruption."
+                        "We attempted to charge your card but it failed. We will retry in 2 days. Please update your payment method to avoid service interruption."
                     )
 
     def handle_successful_renewal(self, sub, amount, data):

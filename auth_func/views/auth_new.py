@@ -7,25 +7,19 @@ from rest_framework import status
 from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 from django.contrib.auth import authenticate, get_user_model
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.core.validators import validate_email
-from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.contrib.auth.tokens import default_token_generator
-from django.core.mail import send_mail
 from django.conf import settings
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.core.cache import cache
 from drf_spectacular.utils import extend_schema
 from utils import (
-    sanitize_input, validate_username, validate_password, 
+    sanitize_input, validate_password, 
     validate_email_format, validate_organization_name, rate_limit_key
 )
 from core.messaging import send_dual_notification
-from organizations.serializers import OrganizationSerializer
 import secrets
-import string
-import random
 import logging
 from rate_limiting import rate_limit
 
@@ -385,11 +379,11 @@ async def register_with_workspace_invitation_view(request):
             cache.set(ws_invite_key, invitation_token, timeout=3600)  # 1 hour
 
             print(f"\n{'='*60}")
-            print(f"📝 New user registered via workspace invitation")
+            print("📝 New user registered via workspace invitation")
             print(f"   Email: {email}")
             print(f"   Workspace: {invitation.workspace.name}")
             print(f"   Role: {invitation.role}")
-            print(f"   OTP sent — awaiting verification")
+            print("   OTP sent — awaiting verification")
             print(f"{'='*60}\n")
 
             return Response({
@@ -603,7 +597,7 @@ async def verify_otp_view(request):
                         'name': invitation.workspace.name
                     }
                     print(f"\n{'='*50}")
-                    print(f"🎉 Auto-accepted workspace invitation!")
+                    print("🎉 Auto-accepted workspace invitation!")
                     print(f"   User: {email}")
                     print(f"   Workspace: {invitation.workspace.name}")
                     print(f"   Role: {invitation.role}")
@@ -1091,7 +1085,7 @@ async def update_profile_view(request):
 async def create_organization_view(request):
     @sync_to_async
     def _sync_logic():
-        user = request.user
+
         organization_name = sanitize_input(request.data.get('name', ''), 100)
 
         if not organization_name:

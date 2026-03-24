@@ -7,15 +7,18 @@ from rest_framework.pagination import PageNumberPagination
 from django.shortcuts import get_object_or_404
 from django.db.models import Count, Avg, Max, Sum
 from django.utils import timezone
-from django.core.cache import cache
 from drf_spectacular.utils import extend_schema
 from datetime import datetime, timedelta
 
 from .models import ModuleAccess, ModulePreferences
-from .serializers import *
+from .serializers import (
+    ModuleAccessSerializer,
+    ModuleAccessCreateSerializer,
+    ModulePreferencesSerializer
+)
 from workspaces.models import Workspace
 from utils import check_workspace_permission
-from rate_limiting import rate_limit, get_error_response
+from rate_limiting import rate_limit
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
@@ -93,8 +96,8 @@ async def user_module_access(request, userId):
                 except Workspace.DoesNotExist:
                     return Response({'error': 'Workspace not found'}, status=status.HTTP_404_NOT_FOUND)
 
-            ip_address = request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR'))
-            user_agent = request.META.get('HTTP_USER_AGENT', '')
+            ip_address = request.headers.get('x-forwarded-for', request.META.get('REMOTE_ADDR'))
+            user_agent = request.headers.get('user-agent', '')
 
             module_access = ModuleAccess.objects.create(
                 user=request.user,
@@ -353,7 +356,7 @@ async def user_module_insights(request, userId):
                 'type': 'unused_features',
                 'title': 'Discover new features!',
                 'description': f"You haven't tried {unused_display} yet.",
-                'recommendation': f"These features might help your workflow. Give them a try!",
+                'recommendation': "These features might help your workflow. Give them a try!",
                 'icon': '💡'
             })
 

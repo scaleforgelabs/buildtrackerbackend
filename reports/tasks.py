@@ -107,7 +107,7 @@ def generate_workspace_report_task(report_id):
         report.save()
     except Report.DoesNotExist:
         pass
-    except Exception as e:
+    except Exception:
         report = Report.objects.get(id=report_id)
         report.status = 'failed'
         report.save()
@@ -127,7 +127,7 @@ def generate_personal_report_task(report_id):
         report.save()
     except Report.DoesNotExist:
         pass
-    except Exception as e:
+    except Exception:
         report = Report.objects.get(id=report_id)
         report.status = 'failed'
         report.save()

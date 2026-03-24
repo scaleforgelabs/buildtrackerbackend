@@ -198,8 +198,8 @@ def create_workspace_log(workspace, user, log_type, action, description, entity_
     user_agent = ''
     
     if request:
-        ip_address = request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR'))
-        user_agent = request.META.get('HTTP_USER_AGENT', '')
+        ip_address = request.headers.get('x-forwarded-for', request.META.get('REMOTE_ADDR'))
+        user_agent = request.headers.get('user-agent', '')
     
     workspace_id = workspace.id if workspace else None
     user_id = user.id if user else None
@@ -226,8 +226,8 @@ def create_audit_log(workspace, user, action, entity_type, entity_id=None, old_v
     session_id = ''
     
     if request:
-        ip_address = request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR'))
-        user_agent = request.META.get('HTTP_USER_AGENT', '')
+        ip_address = request.headers.get('x-forwarded-for', request.META.get('REMOTE_ADDR'))
+        user_agent = request.headers.get('user-agent', '')
         session_id = request.session.session_key or ''
     
     workspace_id = workspace.id if workspace else None
@@ -254,8 +254,8 @@ def create_user_activity_log(user, activity_type, workspace=None, module='', end
     session_id = ''
     
     if request:
-        ip_address = request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR'))
-        user_agent = request.META.get('HTTP_USER_AGENT', '')
+        ip_address = request.headers.get('x-forwarded-for', request.META.get('REMOTE_ADDR'))
+        user_agent = request.headers.get('user-agent', '')
         session_id = request.session.session_key or ''
         if not endpoint:
             endpoint = request.path
@@ -292,9 +292,9 @@ def create_system_event_log(event_type, severity, message, source, workspace=Non
         metadata or {}
     )
 
-from contextlib import contextmanager
-import time
-from django.core.cache import cache
+from contextlib import contextmanager  # noqa: E402
+import time  # noqa: E402
+from django.core.cache import cache  # noqa: E402
 
 @contextmanager
 def cache_lock(lock_key, timeout=10, sleep_time=0.1):

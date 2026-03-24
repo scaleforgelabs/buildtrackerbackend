@@ -1,4 +1,3 @@
-import os
 import glob
 
 def process_file(filepath):
@@ -6,13 +5,13 @@ def process_file(filepath):
         lines = f.readlines()
 
     out_lines = []
-    has_adrf = any('from adrf.decorators import api_view' in l for l in lines)
+    has_adrf = any('from adrf.decorators import api_view' in line for line in lines)
     if has_adrf:
         print(f"Skipping {filepath}, already has adrf")
         return
 
     i = 0
-    in_api_view_function = False
+
     function_indent = 0
     
     while i < len(lines):
@@ -84,8 +83,8 @@ def process_file(filepath):
             
     if not has_adrf:
         import_idx = 0
-        for idx, l in enumerate(out_lines):
-            if l.startswith('from ') or l.startswith('import '):
+        for idx, line in enumerate(out_lines):
+            if line.startswith('from ') or line.startswith('import '):
                 import_idx = idx
                 break
         out_lines.insert(import_idx, 'from adrf.decorators import api_view\n')
@@ -98,8 +97,10 @@ def process_file(filepath):
 
 if __name__ == '__main__':
     for p in glob.glob("**/*/views.py", recursive=True) + glob.glob("**/*/views/*.py", recursive=True):
-        if 'venv' in p: continue
+        if 'venv' in p:
+            continue
         with open(p, 'r', encoding='utf-8') as f:
-            if '@api_view' not in f.read(): continue
+            if '@api_view' not in f.read():
+                continue
         process_file(p)
     print("Done")

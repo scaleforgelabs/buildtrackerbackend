@@ -4,7 +4,6 @@ from rest_framework import status, permissions
 from rest_framework.decorators import permission_classes
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import AllowAny
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, Count
 from django.utils import timezone
@@ -18,9 +17,7 @@ from .serializers import (
     WorkspaceSerializer, WorkspaceCreateSerializer, WorkspaceMemberSerializer,
     WorkspaceInvitationSerializer, WorkspaceMemberCreateSerializer
 )
-from django.core.mail import send_mail
-from django.conf import settings
-from utils import sanitize_input, rate_limit_key, check_workspace_permission, create_workspace_log, create_audit_log, create_user_activity_log
+from utils import sanitize_input, check_workspace_permission, create_workspace_log, create_audit_log, create_user_activity_log
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
@@ -973,7 +970,7 @@ async def get_invitation_details(request, token):
             User = get_user_model()
 
             try:
-                user = User.objects.get(email=invitation.email)
+                User.objects.get(email=invitation.email)
                 user_exists = True
                 registration_required = False
             except User.DoesNotExist:
@@ -1046,7 +1043,7 @@ async def workspace_settings(request, workspaceId):
                 'can_create_backups': user_role in ['Owner', 'Admin']
             }
 
-            from .serializers import WorkspaceSettingsSerializer, WorkspacePermissionsSerializer
+            from .serializers import WorkspaceSettingsSerializer
 
             response_data = {
                 'settings': WorkspaceSettingsSerializer(settings_obj).data,

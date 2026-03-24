@@ -5,7 +5,6 @@ from rest_framework.decorators import permission_classes, parser_classes
 from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from django.db.models import Q, F
 from drf_spectacular.utils import extend_schema
 from cachalot.api import cachalot_disabled
 
@@ -15,7 +14,7 @@ from .serializers import (
     SharedQuickLinkSerializer, SharedQuickLinkCreateSerializer,
     RecentItemSerializer, RecentItemCreateSerializer, FrequentItemSerializer
 )
-from workspaces.models import Workspace, WorkspaceMember
+from workspaces.models import Workspace
 from utils import check_workspace_permission
 
 def check_user_permission(request_user, target_user_id):

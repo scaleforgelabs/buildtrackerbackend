@@ -2,9 +2,8 @@ from adrf.decorators import api_view
 from asgiref.sync import sync_to_async
 from rest_framework.decorators import permission_classes
 from rest_framework.response import Response
-from rest_framework import status, permissions
+from rest_framework import permissions
 from drf_spectacular.utils import extend_schema
-from drf_spectacular.openapi import OpenApiParameter, OpenApiTypes
 from celery import shared_task
 from django.core.cache import cache
 from django.http import JsonResponse

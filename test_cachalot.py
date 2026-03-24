@@ -6,9 +6,9 @@ from asgiref.sync import sync_to_async
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'buildtracker__backend.settings')
 django.setup()
 
-from wiki.models import WikiDocument
-from workspaces.models import Workspace
-from django.contrib.auth import get_user_model
+from wiki.models import WikiDocument  # noqa: E402
+from workspaces.models import Workspace  # noqa: E402
+from django.contrib.auth import get_user_model  # noqa: E402
 
 User = get_user_model()
 

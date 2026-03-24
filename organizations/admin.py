@@ -8,9 +8,11 @@ class OrganizationAdmin(admin.ModelAdmin):
     search_fields = ['name', 'owner__email', 'billing_email']
     readonly_fields = ['id', 'created_at', 'updated_at', 'member_count']
     
+    @admin.display(
+        description='Members'
+    )
     def member_count(self, obj):
         return obj.member_count
-    member_count.short_description = 'Members'
 
 @admin.register(OrganizationMembership)
 class OrganizationMembershipAdmin(admin.ModelAdmin):

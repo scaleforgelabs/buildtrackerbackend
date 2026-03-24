@@ -1,6 +1,5 @@
 from django.urls import path
 from .views import profile, social_auth, auth_new
-from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
     path('register/', auth_new.register_view, name='register'),

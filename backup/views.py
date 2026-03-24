@@ -10,9 +10,7 @@ from django.db.models import Sum
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from datetime import timedelta
-from django.http import HttpResponse, Http404
-from django.conf import settings
-import os
+from django.http import HttpResponse
 import json
 
 from .models import BackupJob, ExportJob

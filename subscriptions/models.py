@@ -1,5 +1,4 @@
 from django.db import models
-from django.conf import settings
 from organizations.models import Organization
 import uuid
 

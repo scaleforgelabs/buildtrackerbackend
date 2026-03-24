@@ -140,7 +140,7 @@ async def google_auth(request):
 
 def get_apple_public_key(kid):
     """Fetch Apple's public key for a specific KID"""
-    response = requests.get('https://appleid.apple.com/auth/keys')
+    response = requests.get('https://appleid.apple.com/auth/keys', timeout=10)
     keys = response.json().get('keys', [])
     for key in keys:
         if key.get('kid') == kid:

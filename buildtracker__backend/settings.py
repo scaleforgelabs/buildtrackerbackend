@@ -193,7 +193,7 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-import os
+import os  # noqa: E402
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
@@ -250,7 +250,7 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_ALWAYS_EAGER = True  # Tasks execute immediately for development
 
 # Celery Beat Schedule for Periodic Tasks
-from celery.schedules import crontab
+from celery.schedules import crontab  # noqa: E402
 
 CELERY_BEAT_SCHEDULE = {
     'process-subscriptions-daily': {
@@ -368,7 +368,7 @@ SOCIALACCOUNT_PROVIDERS = {
         'SCOPE': ['name', 'email'],
         'APP': {
             'client_id': config('APPLE_CLIENT_ID'),
-            'secret': '',  # Apple uses private key instead
+            'secret': '',  # Apple uses private key instead # nosec
             'key': config('APPLE_KEY_ID'),
             'team': config('APPLE_TEAM_ID'),
         }
@@ -384,6 +384,14 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://localhost:8080",
     "http://127.0.0.1:8080",
+    "https://buildtrackerapp.com",
+    "https://www.buildtrackerapp.com",
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://buildtrackerapp.com",
+    "https://www.buildtrackerapp.com",
+    "https://api.buildtrackerapp.com",
 ]
 
 CORS_ALLOW_ALL_ORIGINS = config('CORS_ALLOW_ALL_ORIGINS', default='False').lower() == 'true'  # For development only
@@ -410,7 +418,7 @@ SOCIALACCOUNT_ADAPTER = 'allauth.socialaccount.adapter.DefaultSocialAccountAdapt
 ACCOUNT_ADAPTER = 'allauth.account.adapter.DefaultAccountAdapter'
 
 # JWT Configuration
-from datetime import timedelta
+from datetime import timedelta  # noqa: E402
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),  # 1 hour
@@ -431,10 +439,10 @@ SIMPLE_JWT = {
     'USER_ID_CLAIM': 'user_id',
     'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
     'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
-    'TOKEN_TYPE_CLAIM': 'token_type',
-    'TOKEN_USER_CLASS': 'rest_framework_simplejwt.models.TokenUser',
+    'TOKEN_TYPE_CLAIM': 'token_type',  # nosec
+    'TOKEN_USER_CLASS': 'rest_framework_simplejwt.models.TokenUser',  # nosec
     'JTI_CLAIM': 'jti',
-    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
+    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',  # nosec
     'SLIDING_TOKEN_LIFETIME': timedelta(minutes=60),
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
