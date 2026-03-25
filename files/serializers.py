@@ -72,7 +72,6 @@ class FileUploadSerializer(serializers.ModelSerializer):
         
         file_obj = File.objects.create(
             file=validated_data['file'],
-            file_name=validated_data['file'].name,
             uploaded_by=user,
             workspace=workspace,
             folder=folder

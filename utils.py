@@ -191,6 +191,13 @@ def check_workspace_permission(user, workspace, required_roles=['Owner', 'Admin'
     except WorkspaceMember.DoesNotExist:
         return False
 
+def is_resource_owner_or_admin(user, workspace, resource):
+    creator = getattr(resource, 'created_by', getattr(resource, 'uploaded_by', getattr(resource, 'author', None)))
+    if creator == user:
+        return True
+    
+    return check_workspace_permission(user, workspace, required_roles=['Owner', 'Admin'])
+
 def create_workspace_log(workspace, user, log_type, action, description, entity_type='', entity_id=None, metadata=None, severity='info', request=None):
     from logs.tasks import create_workspace_log_task
     

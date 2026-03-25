@@ -13,7 +13,7 @@ from datetime import datetime
 from .models import File, Folder
 from .serializers import FileSerializer, FileUploadSerializer, FolderSerializer, FolderCreateSerializer
 from workspaces.models import Workspace
-from utils import sanitize_input, check_storage_limit, check_workspace_permission
+from utils import sanitize_input, check_storage_limit, check_workspace_permission, is_resource_owner_or_admin
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
@@ -136,6 +136,8 @@ async def file_detail(request, id):
                 })
 
             elif request.method == 'PUT':
+                if not is_resource_owner_or_admin(request.user, file_obj.workspace, file_obj):
+                    return Response({'error': 'Permission denied: You do not have permission to rename this file'}, status=status.HTTP_403_FORBIDDEN)
 
                 if 'file_name' in request.data:
                     file_obj.file_name = request.data['file_name']
@@ -163,11 +165,8 @@ async def file_delete(request, id):
             file_obj = File.objects.get(id=id)
 
 
-            if file_obj.workspace:
-                if not check_workspace_permission(request.user, file_obj.workspace, ['Owner', 'Admin']):
-                    return Response({'error': 'Only workspace owners and admins can delete files'}, status=status.HTTP_403_FORBIDDEN)
-            elif file_obj.uploaded_by != request.user:
-                return Response({'error': 'Only file owner can delete this file'}, status=status.HTTP_403_FORBIDDEN)
+            if not is_resource_owner_or_admin(request.user, file_obj.workspace, file_obj):
+                return Response({'error': 'Permission denied: Only the file owner or workspace admins can delete this file'}, status=status.HTTP_403_FORBIDDEN)
 
             file_obj.delete()
             return Response({'message': 'File deleted successfully'})
@@ -280,6 +279,9 @@ async def folder_contents(request, workspaceId, folderId=None):
         if request.method == 'PUT' and folderId:
 
             folder = get_object_or_404(Folder, id=folderId, workspace=workspace)
+            if not is_resource_owner_or_admin(request.user, workspace, folder):
+                return Response({'error': 'Permission denied: You do not have permission to rename this folder'}, status=status.HTTP_403_FORBIDDEN)
+
             if 'folder_name' in request.data:
                 folder.name = request.data['folder_name']
                 folder.save()
@@ -363,10 +365,10 @@ async def delete_folder(request, workspaceId, folderId):
     @sync_to_async
     def _sync_logic():
         workspace = get_object_or_404(Workspace, id=workspaceId)
-        if not check_workspace_permission(request.user, workspace, ['Owner', 'Admin']):
-            return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
-
         folder = get_object_or_404(Folder, id=folderId, workspace=workspace)
+        if not is_resource_owner_or_admin(request.user, workspace, folder):
+            return Response({'error': 'Permission denied: Only the folder creator or workspace admins can delete this folder'}, status=status.HTTP_403_FORBIDDEN)
+
         folder.delete()
         return Response({'message': 'Folder deleted successfully'})
     return await _sync_logic()

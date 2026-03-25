@@ -14,7 +14,7 @@ from cachalot.api import cachalot_disabled
 from .models import WikiDocument, WikiDocumentAttachment
 from .serializers import WikiDocumentSerializer, WikiDocumentCreateSerializer, WikiDocumentAttachmentSerializer, UserSerializer
 from workspaces.models import Workspace
-from utils import sanitize_input, check_storage_limit, check_workspace_permission, create_workspace_log, create_audit_log, create_user_activity_log
+from utils import sanitize_input, check_storage_limit, check_workspace_permission, create_workspace_log, create_audit_log, create_user_activity_log, is_resource_owner_or_admin
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
@@ -234,6 +234,8 @@ async def wiki_document_detail(request, workspaceId, id):
             })
 
         elif request.method == 'PUT':
+            if not is_resource_owner_or_admin(request.user, workspace, document):
+                return Response({'error': 'Permission denied: You do not have permission to edit this document'}, status=status.HTTP_403_FORBIDDEN)
 
             if hasattr(request, 'FILES') and request.FILES:
                 total_size = sum(f.size for f in request.FILES.getlist('attachments'))
@@ -292,6 +294,8 @@ async def wiki_document_detail(request, workspaceId, id):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         elif request.method == 'DELETE':
+            if not is_resource_owner_or_admin(request.user, workspace, document):
+                return Response({'error': 'Permission denied: Only the document author or workspace admins can delete this document'}, status=status.HTTP_403_FORBIDDEN)
             document_title = document.document_title
             document_id = document.id
             old_values = {'document_title': document.document_title, 'category': document.category}
