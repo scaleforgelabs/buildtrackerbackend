@@ -292,6 +292,7 @@ def get_performance_analytics(workspace, date_from=None, date_to=None, bypass_ca
             'severity': bt.get('priority', 'medium'),
             'description': bt['blocker_reason'] or 'No reason specified',
             'impact_score': 0,
+            'ticket_number': bt.get('ticket_number'),
         })
     
     milestone_metrics = []
