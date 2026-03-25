@@ -34,6 +34,31 @@ class Folder(models.Model):
             subfolders.extend(subfolder.get_all_subfolders())
         return subfolders
 
+    def get_total_size(self):
+        """Recursively calculate total size of all files in this folder and subfolders"""
+        total = sum(file.file_size for file in self.files.all())
+        for subfolder in self.subfolders.all():
+            total += subfolder.get_total_size()
+        return total
+
+    def get_contributors(self):
+        """Get unique set of users who have uploaded files in this folder or subfolders"""
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        uploader_ids = set(self.files.values_list('uploaded_by', flat=True))
+        for subfolder in self.subfolders.all():
+            uploader_ids.update(subfolder.get_contributors_ids())
+        
+        return User.objects.filter(id__in=uploader_ids)
+
+    def get_contributors_ids(self):
+        """Helper to get uploader IDs recursively"""
+        ids = set(self.files.values_list('uploaded_by', flat=True))
+        for subfolder in self.subfolders.all():
+            ids.update(subfolder.get_contributors_ids())
+        return ids
+
 class File(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     workspace = models.ForeignKey('workspaces.Workspace', on_delete=models.CASCADE, related_name='files', null=True, blank=True)

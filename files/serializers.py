@@ -12,14 +12,19 @@ class UserSerializer(serializers.ModelSerializer):
 class FolderSerializer(serializers.ModelSerializer):
     created_by_user = UserSerializer(source='created_by', read_only=True)
     path = serializers.SerializerMethodField()
+    total_size = serializers.SerializerMethodField()
+    contributors = UserSerializer(source='get_contributors', many=True, read_only=True)
     
     class Meta:
         model = Folder
-        fields = ['id', 'name', 'parent', 'path', 'created_by', 'created_by_user', 'created_at']
+        fields = ['id', 'name', 'parent', 'path', 'created_by', 'created_by_user', 'created_at', 'total_size', 'contributors']
         read_only_fields = ['created_by', 'created_at']
     
     def get_path(self, obj):
         return obj.get_path()
+
+    def get_total_size(self, obj):
+        return obj.get_total_size()
 
 class FileSerializer(serializers.ModelSerializer):
     uploaded_by_user = UserSerializer(source='uploaded_by', read_only=True)
