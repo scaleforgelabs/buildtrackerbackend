@@ -551,6 +551,8 @@ async def workspace_member_detail(request, id, userId):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         elif request.method == 'DELETE':
+            if member.role == 'Owner' and request.user.id != member.user.id:
+                return Response({'error': 'Only the workspace owner can remove themselves'}, status=status.HTTP_403_FORBIDDEN)
 
             member_email = member.user.email
             member_user_id = member.user.id
@@ -558,7 +560,6 @@ async def workspace_member_detail(request, id, userId):
             old_values = {'user_email': member.user.email, 'role': member.role}
             member.delete()
 
-            # Notify removed member via email + in-app
             from .tasks import send_workspace_member_removed_email
             send_workspace_member_removed_email.delay(
                 str(member_user_id),
