@@ -59,13 +59,14 @@ class File(models.Model):
         return self.file_name
     
     def save(self, *args, **kwargs):
-        if self.file:
-            if not self.file_name:
-                self.file_name = self.file.name
-            if not self.file_size:
-                self.file_size = self.file.size
-            if not self.file_type:
-                self.file_type = os.path.splitext(self.file.name)[1].lower().replace('.', '')
+        if not self.pk: # Only on creation
+            if self.file:
+                if not self.file_name:
+                    self.file_name = os.path.basename(self.file.name)
+                if not self.file_size:
+                    self.file_size = self.file.size
+                if not self.file_type:
+                    self.file_type = os.path.splitext(self.file.name)[1].lower().replace('.', '')
         super().save(*args, **kwargs)
     
     def delete(self, *args, **kwargs):
