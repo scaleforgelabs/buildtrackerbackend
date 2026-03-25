@@ -494,18 +494,33 @@ async def workspace_member_detail(request, id, userId):
             return Response({'error': 'Only owners and admins can manage members'}, status=status.HTTP_403_FORBIDDEN)
 
         if request.method == 'PUT':
-            # Prevent changing Owner role
-            if member.role == 'Owner' and 'role' in request.data and request.data['role'] != 'Owner':
-                return Response({'error': 'Owner role cannot be changed'}, status=status.HTTP_400_BAD_REQUEST)
             update_data = {}
             for key, value in request.data.items():
                 if value is not None and value != '':
                     update_data[key] = value
 
+            # If editing an Owner, strip out role changes to preserve Owner status
+            if member.role == 'Owner' and 'role' in update_data:
+                del update_data['role']
+
             serializer = WorkspaceMemberSerializer(member, data=update_data, partial=True)
             if serializer.is_valid():
                 old_values = {k: getattr(member, k, None) for k in update_data.keys()}
                 serializer.save()
+
+                # Also update the User model fields so changes reflect in the UI
+                user_obj = member.user
+                user_changed = False
+                if 'name' in update_data and update_data['name']:
+                    name_parts = update_data['name'].strip().split(' ', 1)
+                    user_obj.first_name = name_parts[0]
+                    user_obj.last_name = name_parts[1] if len(name_parts) > 1 else ''
+                    user_changed = True
+                if 'phone' in update_data:
+                    user_obj.phone = update_data['phone']
+                    user_changed = True
+                if user_changed:
+                    user_obj.save()
 
                 create_workspace_log(
                     workspace=workspace,
@@ -536,8 +551,6 @@ async def workspace_member_detail(request, id, userId):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         elif request.method == 'DELETE':
-            if member.role == 'Owner':
-                return Response({'error': 'Cannot remove workspace owner'}, status=status.HTTP_400_BAD_REQUEST)
 
             member_email = member.user.email
             member_user_id = member.user.id

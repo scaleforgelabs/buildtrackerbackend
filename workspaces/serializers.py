@@ -16,7 +16,7 @@ class WorkspaceMemberSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkspaceMember
         fields = ['id', 'user', 'name', 'phone', 'job_role', 'role', 'user_status', 'joined_at', 'email']
-        read_only_fields = ['id', 'user', 'role', 'joined_at', 'email']
+        read_only_fields = ['id', 'user', 'joined_at', 'email']
 
 class WorkspaceSerializer(serializers.ModelSerializer):
     owner = UserBasicSerializer(read_only=True)
