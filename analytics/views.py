@@ -284,27 +284,14 @@ def get_performance_analytics(workspace, date_from=None, date_to=None, bypass_ca
     team_efficiency = round(max(0, completion_rate - blocked_rate), 1)
     
     bottlenecks = []
-    overdue_count = tasks.filter(end_date__lt=timezone.now(), status__in=['pending', 'in_progress']).count()
-    if overdue_count > total_tasks * 0.2:
-        overdue_rate = (overdue_count / max(total_tasks, 1)) * 100
-        impact_score = min(10, overdue_rate / 10)
+    # Return actual individual blocked tasks with their names and blocker reasons
+    blocked_tasks_qs = tasks.filter(has_blocker=True).values('task_name', 'blocker_reason', 'priority', 'ticket_number')
+    for bt in blocked_tasks_qs:
         bottlenecks.append({
-            'area': 'Task Management',
-            'severity': 'high',
-            'description': f'{overdue_count} tasks are overdue',
-            'impact_score': round(impact_score, 1)
-        })
-    
-    blocked_count = tasks.filter(has_blocker=True).count()
-    if blocked_count > 0:
-        blocked_rate = (blocked_count / max(total_tasks, 1)) * 100
-        impact_score = min(10, blocked_rate / 10)
-        severity = 'high' if blocked_rate > 20 else 'medium'
-        bottlenecks.append({
-            'area': 'Workflow',
-            'severity': severity,
-            'description': f'{blocked_count} tasks are blocked',
-            'impact_score': round(impact_score, 1)
+            'area': bt['task_name'],
+            'severity': bt.get('priority', 'medium'),
+            'description': bt['blocker_reason'] or 'No reason specified',
+            'impact_score': 0,
         })
     
     milestone_metrics = []
