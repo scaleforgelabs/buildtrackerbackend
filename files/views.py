@@ -139,8 +139,9 @@ async def file_detail(request, id):
                 if not is_resource_owner_or_admin(request.user, file_obj.workspace, file_obj):
                     return Response({'error': 'Permission denied: You do not have permission to rename this file'}, status=status.HTTP_403_FORBIDDEN)
 
-                if 'file_name' in request.data:
-                    file_obj.file_name = request.data['file_name']
+                name = request.data.get('file_name') or request.data.get('name')
+                if name:
+                    file_obj.file_name = name
                     file_obj.save()
                 serializer = FileSerializer(file_obj, context={'request': request})
                 return Response(serializer.data)
@@ -282,8 +283,9 @@ async def folder_contents(request, workspaceId, folderId=None):
             if not is_resource_owner_or_admin(request.user, workspace, folder):
                 return Response({'error': 'Permission denied: You do not have permission to rename this folder'}, status=status.HTTP_403_FORBIDDEN)
 
-            if 'folder_name' in request.data:
-                folder.name = request.data['folder_name']
+            name = request.data.get('name') or request.data.get('folder_name')
+            if name:
+                folder.name = name
                 folder.save()
             return Response(FolderSerializer(folder, context={'request': request}).data)
 

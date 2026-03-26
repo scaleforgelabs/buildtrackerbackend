@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import File, Folder
 from django.contrib.auth import get_user_model
+import os
 
 User = get_user_model()
 
@@ -78,7 +79,10 @@ class FileUploadSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({'folder': 'Invalid folder'})
         
         file_obj = File.objects.create(
-            file=validated_data['file'],
+            file=file,
+            file_name=os.path.basename(file.name),
+            file_size=file.size,
+            file_type=os.path.splitext(file.name)[1].lower().replace('.', ''),
             uploaded_by=user,
             workspace=workspace,
             folder=folder

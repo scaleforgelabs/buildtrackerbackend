@@ -90,9 +90,15 @@ class File(models.Model):
     
     def save(self, *args, **kwargs):
         if self.file:
-            self.file_name = self.file.name
-            self.file_size = self.file.size
-            self.file_type = os.path.splitext(self.file.name)[1].lower().replace('.', '')
+            # Only set initial metadata if this is a new file or metadata is missing
+            if not self.file_name:
+                self.file_name = os.path.basename(self.file.name)
+            
+            # Update size and type if they are missing
+            if not self.file_size:
+                self.file_size = self.file.size
+            if not self.file_type:
+                self.file_type = os.path.splitext(self.file.name)[1].lower().replace('.', '')
         super().save(*args, **kwargs)
     
     def delete(self, *args, **kwargs):
