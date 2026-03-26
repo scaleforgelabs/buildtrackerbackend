@@ -5,11 +5,14 @@ class WorkspaceLogSerializer(serializers.ModelSerializer):
     user_email = serializers.CharField(source='user.email', read_only=True)
     user_name = serializers.SerializerMethodField()
     user_avatar = serializers.SerializerMethodField()
+    first_name = serializers.CharField(source='user.first_name', read_only=True)
+    last_name = serializers.CharField(source='user.last_name', read_only=True)
     
     class Meta:
         model = WorkspaceLog
         fields = ['id', 'log_type', 'severity', 'action', 'entity_type', 'entity_id', 
-                 'description', 'metadata', 'user_email', 'user_name', 'user_avatar', 'ip_address', 'created_at']
+                 'description', 'metadata', 'user_email', 'user_name', 'user_avatar', 
+                 'first_name', 'last_name', 'ip_address', 'created_at']
     
     def get_user_name(self, obj):
         if obj.user:

@@ -295,9 +295,20 @@ async def folder_contents(request, workspaceId, folderId=None):
         folders = Folder.objects.filter(workspace=workspace, parent=folder)
         files = File.objects.filter(workspace=workspace, folder=folder)
 
+        # Calculate breadcrumbs
+        breadcrumbs = []
+        curr_breadcrumb = folder
+        while curr_breadcrumb:
+            breadcrumbs.insert(0, {
+                'id': str(curr_breadcrumb.id),
+                'name': curr_breadcrumb.name
+            })
+            curr_breadcrumb = curr_breadcrumb.parent
+
         return Response({
             'folders': FolderSerializer(folders, many=True, context={'request': request}).data,
-            'files': FileSerializer(files, many=True, context={'request': request}).data
+            'files': FileSerializer(files, many=True, context={'request': request}).data,
+            'breadcrumbs': breadcrumbs
         })
 
     return await _sync_logic()
