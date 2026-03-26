@@ -41,6 +41,10 @@ class Folder(models.Model):
             total += subfolder.get_total_size()
         return total
 
+    def get_item_count(self):
+        """Count only immediate items (files + subfolders) in this folder"""
+        return self.files.count() + self.subfolders.count()
+
     def get_contributors(self):
         """Get unique set of users (excluding the creator) who have uploaded files in this folder or subfolders"""
         from django.contrib.auth import get_user_model

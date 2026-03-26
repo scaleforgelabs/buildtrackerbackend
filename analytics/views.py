@@ -210,6 +210,8 @@ def get_dashboard_charts(workspace, period='monthly', milestone=None, date_from=
 
         member_performance.append({
             'member_name': display_name,
+            'member_first_name': member.user.first_name,
+            'member_last_name': member.user.last_name,
             'member_email': member.user.email,
             'member_avatar': member.user.avatar.url if member.user.avatar else None,
             'member_phone': member.phone,

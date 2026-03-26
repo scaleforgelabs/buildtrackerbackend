@@ -15,9 +15,11 @@ class FolderSerializer(serializers.ModelSerializer):
     total_size = serializers.SerializerMethodField()
     contributors = UserSerializer(source='get_contributors', many=True, read_only=True)
     
+    item_count = serializers.IntegerField(source='get_item_count', read_only=True)
+    
     class Meta:
         model = Folder
-        fields = ['id', 'name', 'parent', 'path', 'created_by', 'created_by_user', 'created_at', 'total_size', 'contributors']
+        fields = ['id', 'name', 'parent', 'path', 'created_by', 'created_by_user', 'created_at', 'total_size', 'contributors', 'item_count']
         read_only_fields = ['created_by', 'created_at']
     
     def get_path(self, obj):
