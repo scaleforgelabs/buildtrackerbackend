@@ -31,6 +31,7 @@ class CustomUser(AbstractUser):
     plan_type = models.CharField(max_length=20, choices=PLAN_CHOICES, default='free')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active', db_index=True)
     is_verified = models.BooleanField(default=False)
+    last_active_workspace = models.UUIDField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -73,6 +73,7 @@ async def user_profile(request):
                         'phone': user.phone,
                         'bio': user.bio,
                         'avatar': user.avatar.url if user.avatar else None,
+                        'last_active_workspace': user.last_active_workspace,
                         'date_joined': user.date_joined
                     })
                 except User.DoesNotExist:
@@ -113,6 +114,9 @@ async def user_profile(request):
                     elif field == 'bio':
                         user.bio = sanitize_input(value, 1000)
 
+                    elif field == 'last_active_workspace' and value:
+                        user.last_active_workspace = value
+
                 if 'avatar' in request.FILES:
                     user.avatar = request.FILES['avatar']
 
@@ -128,7 +132,8 @@ async def user_profile(request):
                         'role': user.role,
                         'phone': user.phone,
                         'bio': user.bio,
-                        'avatar': user.avatar.url if user.avatar else None
+                        'avatar': user.avatar.url if user.avatar else None,
+                        'last_active_workspace': user.last_active_workspace
                     }
                 })
 

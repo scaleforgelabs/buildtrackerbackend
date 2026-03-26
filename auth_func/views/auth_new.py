@@ -161,7 +161,8 @@ async def register_view(request):
                     'email': user.email,
                     'first_name': user.first_name,
                     'last_name': user.last_name,
-                    'avatar': user.avatar.url if user.avatar else None
+                    'avatar': user.avatar.url if user.avatar else None,
+                    'last_active_workspace': str(user.last_active_workspace) if user.last_active_workspace else None
                 },
                 'message': 'Registration successful. Please verify your email with the OTP sent.'
             }
@@ -280,11 +281,12 @@ async def register_with_invitation_view(request):
 
             response_data = {
                 'user': {
-                    'id': user.id,
+                    'id': str(user.id),
                     'email': user.email,
                     'first_name': user.first_name,
                     'last_name': user.last_name,
-                    'avatar': user.avatar.url if user.avatar else None
+                    'avatar': user.avatar.url if user.avatar else None,
+                    'last_active_workspace': str(user.last_active_workspace) if user.last_active_workspace else None
                 },
                 'message': 'Registration successful. Please verify your email with the OTP sent.'
             }
@@ -392,6 +394,7 @@ async def register_with_workspace_invitation_view(request):
                     'email': user.email,
                     'first_name': user.first_name,
                     'last_name': user.last_name,
+                    'last_active_workspace': user.last_active_workspace
                 },
                 'message': 'Registration successful. Please verify your email with the OTP sent.',
                 'workspace_name': invitation.workspace.name
@@ -489,7 +492,8 @@ async def login_view(request):
                         'email': user.email,
                         'first_name': user.first_name,
                         'last_name': user.last_name,
-                        'avatar': user.avatar.url if user.avatar else None
+                        'avatar': user.avatar.url if user.avatar else None,
+                        'last_active_workspace': user.last_active_workspace
                     },
                     'token': str(refresh.access_token),
                     'refresh_token': str(refresh)
@@ -613,7 +617,8 @@ async def verify_otp_view(request):
                 'email': user.email,
                 'first_name': user.first_name,
                 'last_name': user.last_name,
-                'avatar': user.avatar.url if user.avatar else None
+                'avatar': user.avatar.url if user.avatar else None,
+                'last_active_workspace': user.last_active_workspace
             },
             'token': str(refresh.access_token),
             'refresh_token': str(refresh),
@@ -967,7 +972,8 @@ async def me_view(request):
                 'role': user.role,
                 'phone': user.phone,
                 'bio': user.bio,
-                'avatar': user.avatar.url if user.avatar else None
+                'avatar': user.avatar.url if user.avatar else None,
+                'last_active_workspace': user.last_active_workspace
             }
         }
 
@@ -1042,7 +1048,8 @@ async def update_profile_view(request):
                 'email': user.email,
                 'first_name': user.first_name,
                 'last_name': user.last_name,
-                'avatar': user.avatar.url if user.avatar else None
+                'avatar': user.avatar.url if user.avatar else None,
+                'last_active_workspace': user.last_active_workspace
             }
         })
 
