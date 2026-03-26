@@ -122,10 +122,17 @@ async def google_auth(request):
             return Response({
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),
-                'user_id': user.id,
-                'email': user.email,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
+                'user': {
+                    'id': str(user.id),
+                    'email': user.email,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                    'avatar': user.avatar.url if user.avatar else None,
+                    'role': user.role,
+                    'phone': user.phone,
+                    'bio': user.bio,
+                    'last_active_workspace': str(user.last_active_workspace) if user.last_active_workspace else None
+                },
                 'created': created
             })
 
@@ -229,8 +236,17 @@ async def apple_auth(request):
             return Response({
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),
-                'user_id': user.id,
-                'email': user.email,
+                'user': {
+                    'id': str(user.id),
+                    'email': user.email,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                    'avatar': user.avatar.url if user.avatar else None,
+                    'role': user.role,
+                    'phone': user.phone,
+                    'bio': user.bio,
+                    'last_active_workspace': str(user.last_active_workspace) if user.last_active_workspace else None
+                },
                 'created': created
             })
 
