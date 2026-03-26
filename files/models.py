@@ -46,16 +46,21 @@ class Folder(models.Model):
         return self.files.count() + self.subfolders.count()
 
     def get_contributors(self):
-        """Get unique set of users (excluding the creator) who have uploaded files in this folder or subfolders"""
+        """Get unique set of users (recursive) who have created subfolders or uploaded files"""
         from django.contrib.auth import get_user_model
         User = get_user_model()
         
-        uploader_ids = set(self.files.values_list('uploaded_by', flat=True))
-        for subfolder in self.subfolders.all():
-            uploader_ids.update(subfolder.get_contributors_ids())
+        # All contributors recursively (uploaders)
+        user_ids = self.get_contributors_ids()
         
-        # Exclude the folder creator from the contributors list
-        return User.objects.filter(id__in=uploader_ids).exclude(id=self.created_by_id)
+        # Add this folder's creator
+        user_ids.add(self.created_by_id)
+        
+        # Add subfolders' creators recursively
+        for subfolder in self.get_all_subfolders():
+            user_ids.add(subfolder.created_by_id)
+            
+        return User.objects.filter(id__in=user_ids)
 
     def get_contributors_ids(self):
         """Helper to get uploader IDs recursively"""

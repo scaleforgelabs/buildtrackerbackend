@@ -20,8 +20,8 @@ class FolderSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Folder
-        fields = ['id', 'name', 'parent', 'path', 'created_by', 'created_by_user', 'created_at', 'total_size', 'contributors', 'item_count']
-        read_only_fields = ['created_by', 'created_at']
+        fields = ['id', 'name', 'parent', 'path', 'created_by', 'created_by_user', 'created_at', 'updated_at', 'total_size', 'contributors', 'item_count']
+        read_only_fields = ['created_by', 'created_at', 'updated_at']
     
     def get_path(self, obj):
         return obj.get_path()
