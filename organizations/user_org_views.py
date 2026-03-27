@@ -7,7 +7,8 @@ from django.utils import timezone
 from django.core.cache import cache
 from django.contrib.auth import get_user_model
 from drf_spectacular.utils import extend_schema
-from workspaces.models import Workspace, WorkspaceMember
+from .models import Organization, OrganizationInvitation
+from workspaces.models import Workspace, WorkspaceMember, WorkspaceInvitation
 from files.models import File
 from wiki.models import WikiDocumentAttachment
 from tasks.models import TaskAttachment, TaskCommentAttachment
@@ -15,28 +16,7 @@ from tasks.models import TaskAttachment, TaskCommentAttachment
 
 User = get_user_model()
 
-PLAN_LIMITS = {
-    'free': {
-        'max_users': 5,
-        'max_workspaces': 2,
-        'max_storage_mb': 2048  
-    },
-    'pro': {
-        'max_users': 10,
-        'max_workspaces': 10,
-        'max_storage_mb': 10240
-    },
-    'business': {
-        'max_users': 30,
-        'max_workspaces': 30,
-        'max_storage_mb': 102400
-    },
-    'enterprise': {
-        'max_users': 999999,
-        'max_workspaces': 999999,
-        'max_storage_mb': 999999999  
-    }
-}
+from subscriptions.constants import PLAN_LIMITS
 
 def get_plan_limits(plan_type):
     """Get plan limits for a given plan type"""
@@ -104,6 +84,20 @@ def calculate_user_stats(user):
             ).values('user').distinct().count()
         except Exception:
             user_count = 0
+            
+        # Add pending invitations
+        try:
+            pending_org_invites = OrganizationInvitation.objects.filter(
+                organization__owner=user, status='pending'
+            ).values_list('email', flat=True)
+            
+            pending_ws_invites = WorkspaceInvitation.objects.filter(
+                workspace__owner=user, status='pending'
+            ).values_list('email', flat=True)
+            
+            pending_invitation_count = len(set(pending_org_invites) | set(pending_ws_invites))
+        except Exception:
+            pending_invitation_count = 0
         
         try:
             workspace_count = my_workspaces.count()
@@ -114,6 +108,8 @@ def calculate_user_stats(user):
         
         return {
             'user_count': user_count,
+            'pending_invitation_count': pending_invitation_count,
+            'total_potential_users': user_count + pending_invitation_count,
             'workspace_count': workspace_count,
             'storage_used_mb': storage_data['storage_used_mb'],
             'file_count': storage_data['file_count']
@@ -121,6 +117,8 @@ def calculate_user_stats(user):
     except Exception:
         return {
             'user_count': 0,
+            'pending_invitation_count': 0,
+            'total_potential_users': 0,
             'workspace_count': 0,
             'storage_used_mb': 0.0,
             'file_count': 0
@@ -200,7 +198,9 @@ def get_user_organization(request, id):
         },
         'usage': usage,
         'plan_limits': limits,
-        'member_count': usage['user_count']
+        'member_count': usage['user_count'],
+        'total_potential_users': usage['total_potential_users'],
+        'pending_invitation_count': usage['pending_invitation_count']
     })
 
 @extend_schema(
@@ -526,7 +526,7 @@ def check_user_organization_limits(request, id):
     limits = get_plan_limits(user.plan_type)
     
     # Check what's allowed
-    can_add_user = current_usage['user_count'] < limits['max_users']
+    can_add_user = current_usage['total_potential_users'] < limits['max_users']
     can_create_workspace = current_usage['workspace_count'] < limits['max_workspaces']
     can_upload_file = current_usage['storage_used_mb'] < limits['max_storage_mb']
     
@@ -544,6 +544,10 @@ def check_user_organization_limits(request, id):
     
     return Response({
         'can_add_user': can_add_user,
+        'current_user_count': current_usage['user_count'],
+        'pending_invitation_count': current_usage['pending_invitation_count'],
+        'total_potential_users': current_usage['total_potential_users'],
+        'max_users_allowed': limits['max_users'],
         'can_create_workspace': can_create_workspace,
         'can_upload_file': can_upload_file,
         'storage_available_mb': round(storage_available_mb, 2),

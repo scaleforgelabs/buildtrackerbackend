@@ -174,7 +174,7 @@ async def workspaces_list_create(request):
 
             if current_usage['workspace_count'] >= limits['max_workspaces']:
                 return Response(
-                    {'error': 'Workspace limit exceeded for your plan'}, 
+                    {'error': f"Workspace limit reached. You have {current_usage['workspace_count']} workspaces (Limit: {limits['max_workspaces']}). Please upgrade your plan to create more workspaces."}, 
                     status=status.HTTP_402_PAYMENT_REQUIRED
                 )
 
@@ -741,9 +741,9 @@ async def workspace_invitations(request, id):
             current_usage = calculate_user_stats(workspace.owner)
             limits = get_plan_limits(workspace.owner.plan_type)
 
-            if current_usage['user_count'] >= limits['max_users']:
+            if current_usage['total_potential_users'] >= limits['max_users']:
                 return Response(
-                    {'error': 'User limit would be exceeded for workspace owner plan'}, 
+                    {'error': f"User limit exceeded for your plan. You have {current_usage['user_count']} members and {current_usage['pending_invitation_count']} pending invitations (Limit: {limits['max_users']})."}, 
                     status=status.HTTP_402_PAYMENT_REQUIRED
                 )
 

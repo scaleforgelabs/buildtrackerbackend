@@ -135,8 +135,8 @@ class WorkspaceMemberCreateSerializer(serializers.ModelSerializer):
         current_usage = calculate_user_stats(workspace.owner)
         limits = get_plan_limits(workspace.owner.plan_type)
         
-        if current_usage['user_count'] >= limits['max_users']:
-            raise serializers.ValidationError("User limit exceeded for workspace owner plan")
+        if current_usage['total_potential_users'] >= limits['max_users']:
+            raise serializers.ValidationError(f"User limit exceeded for your plan. You have {current_usage['user_count']} members and {current_usage['pending_invitation_count']} pending invitations (Limit: {limits['max_users']}).")
         
         return WorkspaceMember.objects.create(
             workspace=workspace,

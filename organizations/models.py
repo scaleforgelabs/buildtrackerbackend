@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth import get_user_model
 import uuid
 from django.utils import timezone
+from subscriptions.constants import PLAN_LIMITS
 
 User = get_user_model()
 
@@ -42,16 +43,26 @@ class Organization(models.Model):
         return self.members.count()
     
     def get_plan_limits(self):
-        limits = {
-            'free': {'max_users': 5, 'max_workspaces': 2, 'max_storage_mb': 2048},
-            'pro': {'max_users': 10, 'max_workspaces': 10, 'max_storage_mb': 10240},
-            'business': {'max_users': 30, 'max_workspaces': 30, 'max_storage_mb': 102400},
-            'enterprise': {'max_users': 999999, 'max_workspaces': 999999, 'max_storage_mb': 999999999},
-        }
-        return limits.get(self.plan_type, limits['free'])
+        return PLAN_LIMITS.get(self.plan_type, PLAN_LIMITS['free'])
     
     def can_add_user(self):
-        return self.member_count < self.get_plan_limits()['max_users']
+        current_members = self.member_count
+        
+        # Get pending organization invitations
+        org_invitations = self.invitations.filter(status='pending').values_list('email', flat=True)
+        
+        # Get pending workspace invitations for workspaces owned by this organization's owner
+        from workspaces.models import WorkspaceInvitation
+        workspace_invitations = WorkspaceInvitation.objects.filter(
+            workspace__owner=self.owner,
+            status='pending'
+        ).values_list('email', flat=True)
+        
+        # Combine distinct emails to avoid double counting if someone is invited to both org and workspace
+        pending_emails = set(org_invitations) | set(workspace_invitations)
+        
+        total_potential_members = current_members + len(pending_emails)
+        return total_potential_members < self.get_plan_limits()['max_users']
     
     def can_create_workspace(self):
         return self.workspaces.count() < self.get_plan_limits()['max_workspaces']

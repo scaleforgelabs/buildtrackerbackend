@@ -402,12 +402,12 @@ async def get_plans(request):
                 'price_naira': 0,
                 'price_usd': 0,
                 'limits': {
-                    'max_users': 5,
+                    'max_users': 3,
                     'max_workspaces': 2,
                     'max_storage_mb': 2048
                 },
                 'features': [
-                    'Up to 5 users',
+                    'Up to 3 users',
                     'Up to 2 workspaces',
                     '2GB storage',
                     'Basic support'
@@ -514,8 +514,15 @@ async def send_organization_invitation(request, id):
             return Response({'error': 'Invalid role'}, status=status.HTTP_400_BAD_REQUEST)
 
         if not organization.can_add_user():
+            # Get counts for informative error message
+            current_members = organization.member_count
+            from workspaces.models import WorkspaceInvitation
+            pending_org_invites = organization.invitations.filter(status='pending').count()
+            pending_ws_invites = WorkspaceInvitation.objects.filter(workspace__owner=organization.owner, status='pending').count()
+            total_pending = pending_org_invites + pending_ws_invites
+            
             return Response(
-                {'error': 'User limit exceeded for organization plan'}, 
+                {'error': f"User limit exceeded for organization plan. You have {current_members} members and {total_pending} pending invitations (Limit: {organization.get_plan_limits()['max_users']})."}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
 

@@ -23,33 +23,8 @@ class PlanListView(generics.GenericAPIView):
     serializer_class = PlanSerializer
 
     async def get(self, request):
-        plans = [
-            {
-                'type': 'free',
-                'name': 'Starter Organization',
-                'price_naira': 0,
-                'price_usd': 0,
-                'limits': {'max_users': 5, 'max_workspaces': 2, 'max_storage_mb': 2048},
-                'features': ['Up to 5 users', 'Up to 2 workspaces', '2GB storage']
-            },
-            {
-                'type': 'pro',
-                'name': 'Pro Organization',
-                'price_naira': 6000,
-                'price_usd': 6,
-                'limits': {'max_users': 10, 'max_workspaces': 10, 'max_storage_mb': 10240},
-                'features': ['Up to 10 users', 'Up to 10 workspaces', '10GB storage', 'Priority support']
-            },
-            {
-                'type': 'business',
-                'name': 'Business Organization',
-                'price_naira': 18000,
-                'price_usd': 18,
-                'limits': {'max_users': 30, 'max_workspaces': 30, 'max_storage_mb': 102400},
-                'features': ['Up to 30 users', 'Up to 30 workspaces', '100GB storage', '24/7 support', 'Advanced analytics']
-            }
-        ]
-        return Response({'plans': plans})
+        from .constants import PLAN_DETAILS
+        return Response({'plans': PLAN_DETAILS})
 
 @extend_schema(tags=["Subscriptions"])
 class SubscriptionDetailView(views.APIView):

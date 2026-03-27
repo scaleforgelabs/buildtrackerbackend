@@ -146,7 +146,8 @@ async def register_view(request):
                     email=email,
                     password=password,
                     first_name=first_name,
-                    last_name=last_name
+                    last_name=last_name,
+                    status='trial'
                 )
 
             # Generate and send OTP
