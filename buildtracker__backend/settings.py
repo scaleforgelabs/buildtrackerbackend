@@ -19,6 +19,10 @@ from dotenv import load_dotenv
 _base_path = Path(__file__).resolve().parent.parent
 load_dotenv(os.path.join(_base_path, '.env'), override=True)
 
+# Fix for missing admin styles on Windows (at the very beginning)
+import mimetypes
+mimetypes.add_type("text/css", ".css", True)
+
 def config(key, default=None):
     return os.environ.get(key, default)
 
@@ -52,6 +56,7 @@ X_FRAME_OPTIONS = 'DENY'
 # Application definition
 
 INSTALLED_APPS = [
+    'whitenoise.runserver_nostatic',
     'auth_func',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -102,6 +107,7 @@ MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'buildtracker__backend.middleware.QueryAndTimingMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -197,9 +203,6 @@ STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static'),
 ]
 
-# Fix for missing admin styles on Windows
-import mimetypes
-mimetypes.add_type("text/css", ".css", True)
 
 # Media files
 AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID')
@@ -221,7 +224,7 @@ STORAGES = {
         },
     },
     "staticfiles": {
-        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
     },
 }
 
