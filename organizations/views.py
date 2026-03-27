@@ -402,12 +402,12 @@ async def get_plans(request):
                 'price_naira': 0,
                 'price_usd': 0,
                 'limits': {
-                    'max_users': 3,
+                    'max_users': 5,
                     'max_workspaces': 2,
                     'max_storage_mb': 2048
                 },
                 'features': [
-                    'Up to 3 users',
+                    'Up to 5 users',
                     'Up to 2 workspaces',
                     '2GB storage',
                     'Basic support'
