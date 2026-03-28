@@ -16,7 +16,7 @@ from .serializers import (
     TaskAttachmentSerializer, TaskCommentCreateSerializer, PersonalTaskSerializer
 )
 from .tasks import send_task_assignment_email, send_task_status_update_email
-from workspaces.models import Workspace
+from workspaces.models import Workspace, WorkspaceMember
 from utils import sanitize_input, check_workspace_permission, create_workspace_log, create_audit_log, create_user_activity_log, create_notification
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -387,14 +387,13 @@ async def task_detail(request, workspaceId, id):
                     if task.assigned_to: recipients.add(task.assigned_to)
                     
                     # Notify admins/owners
-                    from workspaces.models import WorkspaceMember
                     admins = WorkspaceMember.objects.filter(workspace=workspace, role__in=['Owner', 'Admin']).select_related('user')
                     for admin in admins:
                         if admin.user:
                             recipients.add(admin.user)
                     
                     for recipient in recipients:
-                        if recipient != request.user:
+                        if recipient and recipient.id != request.user.id:
                             create_notification(
                                 user=recipient,
                                 workspace=workspace,
@@ -422,7 +421,7 @@ async def task_detail(request, workspaceId, id):
                             recipients.add(admin.user)
                     
                     for recipient in recipients:
-                        if recipient != request.user:
+                        if recipient and recipient.id != request.user.id:
                             create_notification(
                                 user=recipient,
                                 workspace=workspace,
@@ -593,14 +592,13 @@ async def update_task_status(request, workspaceId, id):
             if task.assigned_to: recipients.add(task.assigned_to)
             
             # Notify admins/owners
-            from workspaces.models import WorkspaceMember
             admins = WorkspaceMember.objects.filter(workspace=workspace, role__in=['Owner', 'Admin']).select_related('user')
             for admin in admins:
                 if admin.user:
                     recipients.add(admin.user)
             
             for recipient in recipients:
-                if recipient != request.user:
+                if recipient and recipient.id != request.user.id:
                     create_notification(
                         user=recipient,
                         workspace=workspace,
@@ -673,14 +671,13 @@ async def assign_task(request, workspaceId, id):
                 if task.assigned_to: recipients.add(task.assigned_to)
                 
                 # Notify admins/owners
-                from workspaces.models import WorkspaceMember
                 admins = WorkspaceMember.objects.filter(workspace=workspace, role__in=['Owner', 'Admin']).select_related('user')
                 for admin in admins:
                     if admin.user:
                         recipients.add(admin.user)
 
                 for recipient in recipients:
-                    if recipient != request.user:
+                    if recipient and recipient.id != request.user.id:
                         create_notification(
                             user=recipient,
                             workspace=workspace,
@@ -757,9 +754,6 @@ async def update_task_blocker(request, workspaceId, id):
         )
         
         if blocker_activated_or_updated:
-            from notifications.models import Notification
-            from workspaces.models import WorkspaceMember
-            
             recipients = set()
             if task.created_by: recipients.add(task.created_by)
             if task.assigned_to: recipients.add(task.assigned_to)
@@ -774,7 +768,7 @@ async def update_task_blocker(request, workspaceId, id):
                     
             trigger_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.email
             for recipient in recipients:
-                if recipient != request.user:
+                if recipient and recipient.id != request.user.id:
                     create_notification(
                         user=recipient,
                         workspace=task.workspace,
@@ -798,26 +792,16 @@ async def update_task_blocker(request, workspaceId, id):
         else:
             # Case where blocker was cleared
             if old_has_blocker and not task.has_blocker:
-                admins = WorkspaceMember.objects.filter(
-                    workspace=task.workspace,
-                    role__in=['Owner', 'Admin']
-                ).select_related('user')
-                
                 recipients = set()
                 if task.created_by: recipients.add(task.created_by)
                 if task.assigned_to: recipients.add(task.assigned_to)
-                
-                admins = WorkspaceMember.objects.filter(
-                    workspace=task.workspace,
-                    role__in=['Owner', 'Admin']
-                ).select_related('user')
                 
                 for admin in admins:
                     if admin.user: recipients.add(admin.user)
                 
                 trigger_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.email
                 for recipient in recipients:
-                    if recipient != request.user:
+                    if recipient and recipient.id != request.user.id:
                         create_notification(
                             user=recipient,
                             workspace=task.workspace,
@@ -1034,7 +1018,7 @@ async def task_comments(request, workspaceId, taskId):
                         recipients.add(admin.user)
 
                 for recipient in recipients:
-                    if recipient != request.user:
+                    if recipient and recipient.id != request.user.id:
                         create_notification(
                             user=recipient,
                             workspace=workspace,
@@ -1130,14 +1114,13 @@ async def task_comment_detail(request, workspaceId, taskId, commentId):
                 if task.assigned_to: recipients.add(task.assigned_to)
                 
                 # Notify admins/owners of the workspace
-                from workspaces.models import WorkspaceMember
                 admins = WorkspaceMember.objects.filter(workspace=workspace, role__in=['Owner', 'Admin']).select_related('user')
                 for admin in admins:
                     if admin.user:
                         recipients.add(admin.user)
 
                 for recipient in recipients:
-                    if recipient != request.user:
+                    if recipient and recipient.id != request.user.id:
                         create_notification(
                             user=recipient,
                             workspace=workspace,
@@ -1199,14 +1182,13 @@ async def task_comment_detail(request, workspaceId, taskId, commentId):
             if task.assigned_to: recipients.add(task.assigned_to)
             
             # Notify admins/owners of the workspace
-            from workspaces.models import WorkspaceMember
             admins = WorkspaceMember.objects.filter(workspace=workspace, role__in=['Owner', 'Admin']).select_related('user')
             for admin in admins:
                 if admin.user:
                     recipients.add(admin.user)
 
             for recipient in recipients:
-                if recipient != request.user:
+                if recipient and recipient.id != request.user.id:
                     create_notification(
                         user=recipient,
                         workspace=workspace,
