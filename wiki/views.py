@@ -10,7 +10,7 @@ from drf_spectacular.utils import extend_schema
 from django.utils.html import escape
 from cachalot.api import cachalot_disabled
 
-
+from django.http import FileResponse
 from .models import WikiDocument, WikiDocumentAttachment
 from .serializers import WikiDocumentSerializer, WikiDocumentCreateSerializer, WikiDocumentAttachmentSerializer, UserSerializer
 from workspaces.models import Workspace
@@ -396,5 +396,34 @@ async def wiki_search(request, workspaceId):
             },
             'highlights': highlights
         })
+    return await _sync_logic()
+
+
+@extend_schema(
+    tags=["Wiki"],
+    summary="Download Wiki Attachment",
+    description="Download a specific attachment from a wiki document",
+    responses={200: {'description': 'File stream'}}
+)
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+async def download_wiki_attachment(request, workspaceId, attachmentId):
+    @sync_to_async
+    def _sync_logic():
+        workspace = get_object_or_404(Workspace, id=workspaceId)
+        attachment = get_object_or_404(WikiDocumentAttachment, id=attachmentId, document__workspace=workspace)
+        
+        if not check_workspace_permission(request.user, workspace):
+            return Response({'error': 'Permission denied: You must be a member of this workspace'}, status=status.HTTP_403_FORBIDDEN)
+            
+        if not attachment.file:
+            return Response({'error': 'Attachment file not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+        create_user_activity_log(user=request.user, activity_type='api_request', workspace=workspace, module='wiki', request=request)
+        
+        response = FileResponse(attachment.file.open(), content_type='application/octet-stream')
+        response['Content-Disposition'] = f'attachment; filename="{attachment.file_name}"'
+        return response
+    
     return await _sync_logic()
 
