@@ -17,7 +17,7 @@ from .serializers import (
 )
 from .tasks import send_task_assignment_email, send_task_status_update_email
 from workspaces.models import Workspace
-from utils import sanitize_input, check_workspace_permission, create_workspace_log, create_audit_log, create_user_activity_log
+from utils import sanitize_input, check_workspace_permission, create_workspace_log, create_audit_log, create_user_activity_log, create_notification
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 25
@@ -230,6 +230,16 @@ async def workspace_tasks(request, workspaceId):
 
                     create_user_activity_log(user=request.user, activity_type='api_request', workspace=workspace, module='tasks', request=request)
 
+                    if task.assigned_to:
+                        create_notification(
+                            user=task.assigned_to,
+                            workspace=workspace,
+                            action=f"Task Assigned: {task.task_name}",
+                            description=f"You have been assigned a new task by {request.user.first_name or request.user.email}",
+                            note_type="task_assigned",
+                            severity="info"
+                        )
+
                     return Response({
                         'task': TaskSerializer(task, context={'request': request}).data,
                         'ticket_number': task.ticket_number
@@ -372,12 +382,55 @@ async def task_detail(request, workspaceId, id):
                     from django.db import transaction
                     transaction.on_commit(lambda x=task.id, o=old_status, n=task.status: send_task_status_update_email.delay(str(x), o, n))
                     
+                    recipients = set()
+                    if task.created_by: recipients.add(task.created_by)
+                    if task.assigned_to: recipients.add(task.assigned_to)
+                    
+                    # Notify admins/owners
+                    from workspaces.models import WorkspaceMember
+                    admins = WorkspaceMember.objects.filter(workspace=workspace, role__in=['Owner', 'Admin']).select_related('user')
+                    for admin in admins:
+                        if admin.user:
+                            recipients.add(admin.user)
+                    
+                    for recipient in recipients:
+                        if recipient != request.user:
+                            create_notification(
+                                user=recipient,
+                                workspace=workspace,
+                                action=f"Task Status Updated: {task.task_name}",
+                                description=f"Status changed from {old_status} to {task.status}",
+                                note_type="task_status_change",
+                                severity="info"
+                            )
+                    
                 other_updated_fields = [k for k in update_data.keys() if k not in ['status', 'assigned_to']]
                 if other_updated_fields:
                     updater_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.email
                     from django.db import transaction
                     from .tasks import send_task_general_update_email
                     transaction.on_commit(lambda x=task.id, f=other_updated_fields, un=updater_name: send_task_general_update_email.delay(str(x), f, un))
+                    
+                    recipients = set()
+                    if task.created_by: recipients.add(task.created_by)
+                    if task.assigned_to: recipients.add(task.assigned_to)
+                    
+                    # Notify admins/owners
+                    admins = WorkspaceMember.objects.filter(workspace=workspace, role__in=['Owner', 'Admin']).select_related('user')
+                    for admin in admins:
+                        if admin.user:
+                            recipients.add(admin.user)
+                    
+                    for recipient in recipients:
+                        if recipient != request.user:
+                            create_notification(
+                                user=recipient,
+                                workspace=workspace,
+                                action=f"Task Updated: {task.task_name}",
+                                description=f"Field(s) updated: {', '.join(other_updated_fields)}",
+                                note_type="task_update",
+                                severity="info"
+                            )
 
                 safe_update_data = {}
                 for k, v in update_data.items():
@@ -535,6 +588,28 @@ async def update_task_status(request, workspaceId, id):
                 request=request
             )
 
+            recipients = set()
+            if task.created_by: recipients.add(task.created_by)
+            if task.assigned_to: recipients.add(task.assigned_to)
+            
+            # Notify admins/owners
+            from workspaces.models import WorkspaceMember
+            admins = WorkspaceMember.objects.filter(workspace=workspace, role__in=['Owner', 'Admin']).select_related('user')
+            for admin in admins:
+                if admin.user:
+                    recipients.add(admin.user)
+            
+            for recipient in recipients:
+                if recipient != request.user:
+                    create_notification(
+                        user=recipient,
+                        workspace=workspace,
+                        action=f"Task Status Updated: {task.task_name}",
+                        description=f"Status changed from {old_status} to {task.status}",
+                        note_type="task_status_change",
+                        severity="info"
+                    )
+
         return Response({'task': TaskSerializer(task).data})
 
     return await _sync_logic()
@@ -580,6 +655,40 @@ async def assign_task(request, workspaceId, id):
             if task.assigned_to:
                 from django.db import transaction
                 transaction.on_commit(lambda x=task.id: send_task_assignment_email.delay(str(x)))
+
+                create_workspace_log(
+                    workspace=workspace,
+                    user=request.user,
+                    log_type='task_update',
+                    action='assign',
+                    description=f"Assigned task {task.task_name} to {task.assigned_to.email}",
+                    entity_type='task',
+                    entity_id=task.id,
+                    metadata={'task_name': task.task_name, 'assigned_to': task.assigned_to.email},
+                    request=request
+                )
+
+                recipients = set()
+                if task.created_by: recipients.add(task.created_by)
+                if task.assigned_to: recipients.add(task.assigned_to)
+                
+                # Notify admins/owners
+                from workspaces.models import WorkspaceMember
+                admins = WorkspaceMember.objects.filter(workspace=workspace, role__in=['Owner', 'Admin']).select_related('user')
+                for admin in admins:
+                    if admin.user:
+                        recipients.add(admin.user)
+
+                for recipient in recipients:
+                    if recipient != request.user:
+                        create_notification(
+                            user=recipient,
+                            workspace=workspace,
+                            action=f"Task Assigned: {task.task_name}",
+                            description=f"Task assigned to {task.assigned_to.email} by {request.user.first_name or request.user.email}",
+                            note_type="task_assigned",
+                            severity="info"
+                        )
 
         return Response({'task': TaskSerializer(task).data})
 
@@ -652,27 +761,82 @@ async def update_task_blocker(request, workspaceId, id):
             from workspaces.models import WorkspaceMember
             
             recipients = set()
-            if task.assigned_to and task.assigned_to != request.user:
-                recipients.add(task.assigned_to)
-                
+            if task.created_by: recipients.add(task.created_by)
+            if task.assigned_to: recipients.add(task.assigned_to)
+            
             admins = WorkspaceMember.objects.filter(
                 workspace=task.workspace,
                 role__in=['Owner', 'Admin']
             ).select_related('user')
             
             for admin in admins:
-                if admin.user and admin.user != request.user:
-                    recipients.add(admin.user)
+                if admin.user: recipients.add(admin.user)
                     
             trigger_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.email
             for recipient in recipients:
-                Notification.objects.create(
-                    user=recipient,
+                if recipient != request.user:
+                    create_notification(
+                        user=recipient,
+                        workspace=task.workspace,
+                        action=f"Task Blocked: {task.task_name}",
+                        description=f"{trigger_name} set a blocker: {blocker_reason or 'No reason provided'}",
+                        note_type='task_blocked',
+                        severity='warning'
+                    )
+            
+            create_workspace_log(
+                workspace=workspace,
+                user=request.user,
+                log_type='task_update',
+                action='block',
+                description=f"Task blocked: {task.task_name}",
+                entity_type='task',
+                entity_id=task.id,
+                metadata={'task_name': task.task_name, 'blocker_reason': blocker_reason},
+                request=request
+            )
+        else:
+            # Case where blocker was cleared
+            if old_has_blocker and not task.has_blocker:
+                admins = WorkspaceMember.objects.filter(
                     workspace=task.workspace,
-                    action=f"Task Blocked: {task.task_name}",
-                    description=f"{trigger_name} set a blocker: {blocker_reason or 'No reason provided'}",
-                    note_type='task_blocked',
-                    severity='error'
+                    role__in=['Owner', 'Admin']
+                ).select_related('user')
+                
+                recipients = set()
+                if task.created_by: recipients.add(task.created_by)
+                if task.assigned_to: recipients.add(task.assigned_to)
+                
+                admins = WorkspaceMember.objects.filter(
+                    workspace=task.workspace,
+                    role__in=['Owner', 'Admin']
+                ).select_related('user')
+                
+                for admin in admins:
+                    if admin.user: recipients.add(admin.user)
+                
+                trigger_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.email
+                for recipient in recipients:
+                    if recipient != request.user:
+                        create_notification(
+                            user=recipient,
+                            workspace=task.workspace,
+                            action=f"Blocker Cleared: {task.task_name}",
+                            description=f"{trigger_name} cleared the blocker on '{task.task_name}'",
+                            note_type='task_blocked_cleared',
+                            severity='success'
+                        )
+                
+                create_workspace_log(
+                    workspace=workspace,
+                    user=request.user,
+                    log_type='task_update',
+                    action='unblock',
+                    description=f"Task unblocked: {task.task_name}",
+                    entity_type='task',
+                    entity_id=task.id,
+                    metadata={'task_name': task.task_name},
+                    request=request
                 )
                 
             from .tasks import send_task_blocker_notification
@@ -857,6 +1021,29 @@ async def task_comments(request, workspaceId, taskId):
                     request=request
                 )
 
+                recipients = set()
+                # Notify task creator and assignee
+                if task.created_by: recipients.add(task.created_by)
+                if task.assigned_to: recipients.add(task.assigned_to)
+                
+                # Notify admins/owners of the workspace
+                from workspaces.models import WorkspaceMember
+                admins = WorkspaceMember.objects.filter(workspace=workspace, role__in=['Owner', 'Admin']).select_related('user')
+                for admin in admins:
+                    if admin.user:
+                        recipients.add(admin.user)
+
+                for recipient in recipients:
+                    if recipient != request.user:
+                        create_notification(
+                            user=recipient,
+                            workspace=workspace,
+                            action=f"New Comment: {task.task_name}",
+                            description=f"{request.user.first_name or request.user.email} commented on '{task.task_name}'",
+                            note_type="task_comment",
+                            severity="info"
+                        )
+
                 return Response({
                     'comment': TaskCommentSerializer(comment, context={'request': request}).data
                 }, status=status.HTTP_201_CREATED)
@@ -937,6 +1124,29 @@ async def task_comment_detail(request, workspaceId, taskId, commentId):
                     request=request
                 )
 
+                # Notify relevant users
+                recipients = set()
+                if task.created_by: recipients.add(task.created_by)
+                if task.assigned_to: recipients.add(task.assigned_to)
+                
+                # Notify admins/owners of the workspace
+                from workspaces.models import WorkspaceMember
+                admins = WorkspaceMember.objects.filter(workspace=workspace, role__in=['Owner', 'Admin']).select_related('user')
+                for admin in admins:
+                    if admin.user:
+                        recipients.add(admin.user)
+
+                for recipient in recipients:
+                    if recipient != request.user:
+                        create_notification(
+                            user=recipient,
+                            workspace=workspace,
+                            action=f"Comment Updated: {task.task_name}",
+                            description=f"{request.user.first_name or request.user.email} updated a comment on '{task.task_name}'",
+                            note_type="task_comment",
+                            severity="info"
+                        )
+
             if hasattr(request, 'FILES') and request.FILES:
                 attachment_files = request.FILES.getlist('attachments')
                 for attachment_file in attachment_files:
@@ -982,6 +1192,29 @@ async def task_comment_detail(request, workspaceId, taskId, commentId):
                 old_values=old_values,
                 request=request
             )
+
+            # Notify relevant users
+            recipients = set()
+            if task.created_by: recipients.add(task.created_by)
+            if task.assigned_to: recipients.add(task.assigned_to)
+            
+            # Notify admins/owners of the workspace
+            from workspaces.models import WorkspaceMember
+            admins = WorkspaceMember.objects.filter(workspace=workspace, role__in=['Owner', 'Admin']).select_related('user')
+            for admin in admins:
+                if admin.user:
+                    recipients.add(admin.user)
+
+            for recipient in recipients:
+                if recipient != request.user:
+                    create_notification(
+                        user=recipient,
+                        workspace=workspace,
+                        action=f"Comment Deleted: {task.task_name}",
+                        description=f"{request.user.first_name or request.user.email} deleted a comment on '{task.task_name}'",
+                        note_type="task_comment",
+                        severity="info"
+                    )
 
             return Response({'message': 'Comment deleted successfully'})
 

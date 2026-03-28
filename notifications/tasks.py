@@ -78,3 +78,22 @@ def send_daily_task_summary():
                     note_type='daily_summary',
                     severity='info'
                 )
+
+@shared_task
+def create_notification_task(user_id, workspace_id, action, description=None, note_type=None, severity='info'):
+    from auth_func.models import CustomUser
+    from workspaces.models import Workspace
+    from .models import Notification
+    
+    user = CustomUser.objects.filter(id=user_id).first()
+    workspace = Workspace.objects.filter(id=workspace_id).first() if workspace_id else None
+    
+    if user:
+        Notification.objects.create(
+            user=user,
+            workspace=workspace,
+            action=action,
+            description=description,
+            note_type=note_type,
+            severity=severity
+        )

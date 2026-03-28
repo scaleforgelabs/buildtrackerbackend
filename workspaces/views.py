@@ -17,7 +17,7 @@ from .serializers import (
     WorkspaceSerializer, WorkspaceCreateSerializer, WorkspaceMemberSerializer,
     WorkspaceInvitationSerializer, WorkspaceMemberCreateSerializer
 )
-from utils import sanitize_input, check_workspace_permission, create_workspace_log, create_audit_log, create_user_activity_log
+from utils import sanitize_input, check_workspace_permission, create_workspace_log, create_audit_log, create_user_activity_log, create_notification
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
@@ -434,6 +434,15 @@ async def workspace_members(request, id):
                     request=request
                 )
 
+                create_notification(
+                    user=member.user,
+                    workspace=workspace,
+                    action=f"Added to Workspace: {workspace.name}",
+                    description=f"You have been added to {workspace.name} as {member.role}",
+                    note_type="workspace_access",
+                    severity="success"
+                )
+
                 create_user_activity_log(user=request.user, activity_type='api_request', workspace=workspace, module='workspaces', request=request)
 
                 return Response(
@@ -545,6 +554,15 @@ async def workspace_member_detail(request, id, userId):
                     request=request
                 )
 
+                create_notification(
+                    user=member.user,
+                    workspace=workspace,
+                    action=f"Role Updated in {workspace.name}",
+                    description=f"Your role has been updated. New role: {member.role}",
+                    note_type="workspace_access",
+                    severity="info"
+                )
+
                 create_user_activity_log(user=request.user, activity_type='api_request', workspace=workspace, module='workspaces', request=request)
 
                 return Response({'member': serializer.data})
@@ -558,6 +576,7 @@ async def workspace_member_detail(request, id, userId):
             member_user_id = member.user.id
             member_id = member.id
             old_values = {'user_email': member.user.email, 'role': member.role}
+            member_user_obj = member.user
             member.delete()
 
             from .tasks import send_workspace_member_removed_email
@@ -588,6 +607,15 @@ async def workspace_member_detail(request, id, userId):
                 entity_id=member_id,
                 old_values=old_values,
                 request=request
+            )
+
+            create_notification(
+                user=member_user_obj,
+                workspace=workspace,
+                action=f"Removed from Workspace: {workspace.name}",
+                description=f"You have been removed from {workspace.name}",
+                note_type="workspace_access",
+                severity="warning"
             )
 
             create_user_activity_log(user=request.user, activity_type='api_request', workspace=workspace, module='workspaces', request=request)
@@ -766,6 +794,18 @@ async def workspace_invitations(request, id):
                 from .tasks import send_workspace_invitation_email
                 send_workspace_invitation_email.delay(str(invitation.id))
 
+                create_workspace_log(
+                    workspace=workspace,
+                    user=request.user,
+                    log_type='team_update',
+                    action='invite',
+                    description=f"Invited {invitation.email} to workspace",
+                    entity_type='invitation',
+                    entity_id=invitation.id,
+                    metadata={'email': invitation.email, 'role': invitation.role},
+                    request=request
+                )
+
                 return Response(
                     {'invitation': WorkspaceInvitationSerializer(invitation).data},
                     status=status.HTTP_201_CREATED
@@ -840,7 +880,7 @@ async def workspace_invitation_detail(request, id, invitationId):
             invitation.save()
 
             if new_status == 'accepted':
-                WorkspaceMember.objects.create(
+                new_member = WorkspaceMember.objects.create(
                     workspace=workspace,
                     user=request.user,
                     role=invitation.role,
@@ -849,6 +889,31 @@ async def workspace_invitation_detail(request, id, invitationId):
                     user_status=invitation.user_status,
                     email=request.user.email
                 )
+
+                create_workspace_log(
+                    workspace=workspace,
+                    user=request.user,
+                    log_type='member_add',
+                    action='join',
+                    description=f"Joined workspace: {workspace.name}",
+                    entity_type='workspace',
+                    entity_id=workspace.id,
+                    metadata={'workspace_name': workspace.name, 'role': invitation.role},
+                    request=request
+                )
+
+                # Notify workspace admins/owner
+                admins = WorkspaceMember.objects.filter(workspace=workspace, role__in=['Owner', 'Admin']).select_related('user')
+                for admin in admins:
+                    if admin.user and admin.user != request.user:
+                        create_notification(
+                            user=admin.user,
+                            workspace=workspace,
+                            action=f"New Member Joined: {workspace.name}",
+                            description=f"{request.user.first_name or request.user.email} joined the workspace",
+                            note_type="member_join",
+                            severity="success"
+                        )
 
             return Response({'invitation': WorkspaceInvitationSerializer(invitation).data})
 
@@ -930,6 +995,31 @@ async def accept_workspace_invitation(request):
 
                 invitation.status = 'accepted'
                 invitation.save()
+
+                create_workspace_log(
+                    workspace=invitation.workspace,
+                    user=request.user,
+                    log_type='member_add',
+                    action='join',
+                    description=f"Joined workspace: {invitation.workspace.name}",
+                    entity_type='workspace',
+                    entity_id=invitation.workspace.id,
+                    metadata={'workspace_name': invitation.workspace.name, 'role': invitation.role},
+                    request=request
+                )
+
+                # Notify workspace admins/owner
+                admins = WorkspaceMember.objects.filter(workspace=invitation.workspace, role__in=['Owner', 'Admin']).select_related('user')
+                for admin in admins:
+                    if admin.user and admin.user != request.user:
+                        create_notification(
+                            user=admin.user,
+                            workspace=invitation.workspace,
+                            action=f"New Member Joined: {invitation.workspace.name}",
+                            description=f"{request.user.first_name or request.user.email} joined the workspace",
+                            note_type="member_join",
+                            severity="success"
+                        )
 
             return Response({
                 'workspace': WorkspaceSerializer(invitation.workspace, context={'request': request}).data,
