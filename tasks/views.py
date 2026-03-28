@@ -392,14 +392,16 @@ async def task_detail(request, workspaceId, id):
                         if admin.user:
                             recipients.add(admin.user)
                     
+                    from notifications.models import Notification
+                    trigger_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.email
                     for recipient in recipients:
-                        if recipient and recipient.id != request.user.id:
-                            create_notification(
+                        if recipient:
+                            Notification.objects.create(
                                 user=recipient,
                                 workspace=workspace,
-                                action=f"Task Status Updated: {task.task_name}",
+                                action=f"{trigger_name} updated task status: {task.task_name}",
                                 description=f"Status changed from {old_status} to {task.status}",
-                                note_type="task_status_change",
+                                note_type="task_updated",
                                 severity="info"
                             )
                     
@@ -420,14 +422,16 @@ async def task_detail(request, workspaceId, id):
                         if admin.user:
                             recipients.add(admin.user)
                     
+                    from notifications.models import Notification
+                    trigger_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.email
                     for recipient in recipients:
-                        if recipient and recipient.id != request.user.id:
-                            create_notification(
+                        if recipient:
+                            Notification.objects.create(
                                 user=recipient,
                                 workspace=workspace,
-                                action=f"Task Updated: {task.task_name}",
-                                description=f"Field(s) updated: {', '.join(other_updated_fields)}",
-                                note_type="task_update",
+                                action=f"{trigger_name} updated task: {task.task_name}",
+                                description=f"Field(s) changed: {', '.join(other_updated_fields)}",
+                                note_type="task_updated",
                                 severity="info"
                             )
 
@@ -597,14 +601,16 @@ async def update_task_status(request, workspaceId, id):
                 if admin.user:
                     recipients.add(admin.user)
             
+            from notifications.models import Notification
+            trigger_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.email
             for recipient in recipients:
-                if recipient and recipient.id != request.user.id:
-                    create_notification(
+                if recipient:
+                    Notification.objects.create(
                         user=recipient,
                         workspace=workspace,
-                        action=f"Task Status Updated: {task.task_name}",
-                        description=f"Status changed from {old_status} to {task.status}",
-                        note_type="task_status_change",
+                        action=f"{trigger_name} updated status: {task.task_name}",
+                        description=f"Changed from {old_status} to {task.status}",
+                        note_type="task_updated",
                         severity="info"
                     )
 
@@ -676,13 +682,15 @@ async def assign_task(request, workspaceId, id):
                     if admin.user:
                         recipients.add(admin.user)
 
+                from notifications.models import Notification
+                trigger_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.email
                 for recipient in recipients:
-                    if recipient and recipient.id != request.user.id:
-                        create_notification(
+                    if recipient:
+                        Notification.objects.create(
                             user=recipient,
                             workspace=workspace,
-                            action=f"Task Assigned: {task.task_name}",
-                            description=f"Task assigned to {task.assigned_to.email} by {request.user.first_name or request.user.email}",
+                            action=f"{trigger_name} assigned task: {task.task_name}",
+                            description=f"Assigned to {task.assigned_to.email}",
                             note_type="task_assigned",
                             severity="info"
                         )
@@ -767,14 +775,16 @@ async def update_task_blocker(request, workspaceId, id):
                 if admin.user: recipients.add(admin.user)
                     
             trigger_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.email
+            from notifications.models import Notification
+            trigger_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.email
             for recipient in recipients:
-                if recipient and recipient.id != request.user.id:
-                    create_notification(
+                if recipient:
+                    Notification.objects.create(
                         user=recipient,
                         workspace=task.workspace,
-                        action=f"Task Blocked: {task.task_name}",
-                        description=f"{trigger_name} set a blocker: {blocker_reason or 'No reason provided'}",
-                        note_type='task_blocked',
+                        action=f"{trigger_name} set a blocker on: {task.task_name}",
+                        description=f"Reason: {blocker_reason or 'No reason provided'}",
+                        note_type='task_blocker',
                         severity='warning'
                     )
             
@@ -800,14 +810,16 @@ async def update_task_blocker(request, workspaceId, id):
                     if admin.user: recipients.add(admin.user)
                 
                 trigger_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.email
+                from notifications.models import Notification
+                trigger_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.email
                 for recipient in recipients:
-                    if recipient and recipient.id != request.user.id:
-                        create_notification(
+                    if recipient:
+                        Notification.objects.create(
                             user=recipient,
                             workspace=task.workspace,
-                            action=f"Blocker Cleared: {task.task_name}",
-                            description=f"{trigger_name} cleared the blocker on '{task.task_name}'",
-                            note_type='task_blocked_cleared',
+                            action=f"{trigger_name} cleared blocker on: {task.task_name}",
+                            description=f"Task is no longer blocked",
+                            note_type='task_updated',
                             severity='success'
                         )
                 
@@ -1017,13 +1029,15 @@ async def task_comments(request, workspaceId, taskId):
                     if admin.user:
                         recipients.add(admin.user)
 
+                from notifications.models import Notification
+                trigger_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.email
                 for recipient in recipients:
-                    if recipient and recipient.id != request.user.id:
-                        create_notification(
+                    if recipient:
+                        Notification.objects.create(
                             user=recipient,
                             workspace=workspace,
-                            action=f"New Comment: {task.task_name}",
-                            description=f"{request.user.first_name or request.user.email} commented on '{task.task_name}'",
+                            action=f"{trigger_name} commented on: {task.task_name}",
+                            description=f"'{task.task_name}'",
                             note_type="task_comment",
                             severity="info"
                         )
@@ -1119,13 +1133,15 @@ async def task_comment_detail(request, workspaceId, taskId, commentId):
                     if admin.user:
                         recipients.add(admin.user)
 
+                from notifications.models import Notification
+                trigger_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.email
                 for recipient in recipients:
-                    if recipient and recipient.id != request.user.id:
-                        create_notification(
+                    if recipient:
+                        Notification.objects.create(
                             user=recipient,
                             workspace=workspace,
-                            action=f"Comment Updated: {task.task_name}",
-                            description=f"{request.user.first_name or request.user.email} updated a comment on '{task.task_name}'",
+                            action=f"{trigger_name} updated a comment: {task.task_name}",
+                            description=f"'{task.task_name}'",
                             note_type="task_comment",
                             severity="info"
                         )
@@ -1187,13 +1203,15 @@ async def task_comment_detail(request, workspaceId, taskId, commentId):
                 if admin.user:
                     recipients.add(admin.user)
 
+            from notifications.models import Notification
+            trigger_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.email
             for recipient in recipients:
-                if recipient and recipient.id != request.user.id:
-                    create_notification(
+                if recipient:
+                    Notification.objects.create(
                         user=recipient,
                         workspace=workspace,
-                        action=f"Comment Deleted: {task.task_name}",
-                        description=f"{request.user.first_name or request.user.email} deleted a comment on '{task.task_name}'",
+                        action=f"{trigger_name} deleted a comment: {task.task_name}",
+                        description=f"'{task.task_name}'",
                         note_type="task_comment",
                         severity="info"
                     )

@@ -117,35 +117,6 @@ class TaskCommentCreateSerializer(serializers.ModelSerializer):
                     uploaded_by=user
                 )
         
-        # Create notification for admins and task assignee synchronously
-        from notifications.models import Notification
-        from workspaces.models import WorkspaceMember
-        
-        user_name = f"{user.first_name} {user.last_name}".strip() or user.email
-        
-        recipients = set()
-        if task.assigned_to:
-            recipients.add(task.assigned_to)
-            
-        admins = WorkspaceMember.objects.filter(
-            workspace=task.workspace,
-            role__in=['Owner', 'Admin']
-        ).select_related('user')
-        
-        for admin in admins:
-            if admin.user:
-                recipients.add(admin.user)
-                
-        for recipient in recipients:
-            Notification.objects.create(
-                user=recipient,
-                workspace=task.workspace,
-                action=f"{user_name} commented on: {task.task_name}",
-                description=comment.comment_text[:100],
-                note_type='task_comment',
-                severity='info'
-            )
-            
         from .tasks import send_task_comment_notification
         from django.db import transaction
         transaction.on_commit(lambda: send_task_comment_notification.delay(str(task.id), str(comment.id)))
