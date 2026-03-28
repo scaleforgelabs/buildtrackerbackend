@@ -439,3 +439,31 @@ async def download_folder(request, workspaceId, folderId):
 
     return await _sync_logic()
 
+@extend_schema(
+    tags=["Files"],
+    summary="Download File",
+    description="Force download a file as attachment",
+    responses={200: {'description': 'File content'}}
+)
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+async def file_download(request, id):
+    @sync_to_async
+    def _sync_logic():
+        try:
+            file_obj = File.objects.get(id=id)
+            if file_obj.workspace:
+                if not check_workspace_permission(request.user, file_obj.workspace):
+                    return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+            elif file_obj.uploaded_by != request.user:
+                return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+
+            response = FileResponse(
+                file_obj.file,
+                as_attachment=True,
+                filename=file_obj.file_name
+            )
+            return response
+        except File.DoesNotExist:
+            raise Http404("File not found")
+    return await _sync_logic()
