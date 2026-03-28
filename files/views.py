@@ -6,9 +6,11 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.shortcuts import get_object_or_404
-from django.http import Http404
 from drf_spectacular.utils import extend_schema
 from datetime import datetime
+import zipfile
+import io
+from django.http import FileResponse, Http404
 
 from .models import File, Folder
 from .serializers import FileSerializer, FileUploadSerializer, FolderSerializer, FolderCreateSerializer
@@ -384,5 +386,56 @@ async def delete_folder(request, workspaceId, folderId):
 
         folder.delete()
         return Response({'message': 'Folder deleted successfully'})
+    return await _sync_logic()
+
+@extend_schema(
+    tags=["Files"],
+    summary="Download Folder as ZIP",
+    description="Recursively zip all contents of a folder and download it",
+    responses={200: {'description': 'ZIP file containing folder contents'}}
+)
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+async def download_folder(request, workspaceId, folderId):
+    @sync_to_async
+    def _sync_logic():
+        workspace = get_object_or_404(Workspace, id=workspaceId)
+        root_folder = get_object_or_404(Folder, id=folderId, workspace=workspace)
+        
+        if not check_workspace_permission(request.user, workspace):
+            return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Create ZIP in memory
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            def add_folder_to_zip(folder, base_path=""):
+                # Current folder path in ZIP
+                current_path = f"{base_path}{folder.name}/"
+                
+                # Add all files in this folder
+                for file_obj in folder.files.all():
+                    if file_obj.file:
+                        try:
+                            # Use file_name for the zip path
+                            zip_file.writestr(f"{current_path}{file_obj.file_name}", file_obj.file.read())
+                        except Exception as e:
+                            print(f"Error zipping file {file_obj.id}: {e}")
+                
+                # Recursively add subfolders
+                for subfolder in folder.subfolders.all():
+                    add_folder_to_zip(subfolder, current_path)
+
+            # Start recursion from root
+            add_folder_to_zip(root_folder)
+
+        zip_buffer.seek(0)
+        response = FileResponse(
+            zip_buffer,
+            as_attachment=True,
+            filename=f"{root_folder.name}.zip",
+            content_type='application/zip'
+        )
+        return response
+
     return await _sync_logic()
 

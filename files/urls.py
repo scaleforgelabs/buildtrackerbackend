@@ -11,4 +11,5 @@ urlpatterns = [
     path('workspaces/<uuid:workspaceId>/folders/', views.folder_contents, name='root_folder_contents'),
     path('workspaces/<uuid:workspaceId>/folders/<uuid:folderId>/', views.folder_contents, name='folder_contents'),
     path('workspaces/<uuid:workspaceId>/folders/<uuid:folderId>/delete/', views.delete_folder, name='delete_folder'),
+    path('workspaces/<uuid:workspaceId>/folders/<uuid:folderId>/download/', views.download_folder, name='download_folder'),
 ]
