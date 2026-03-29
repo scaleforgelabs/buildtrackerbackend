@@ -41,6 +41,22 @@ class NotificationSerializer(serializers.ModelSerializer):
             if request:
                 return request.build_absolute_uri(obj.triggered_by.avatar.url)
             return obj.triggered_by.avatar.url
+            
+        name = self.get_triggered_by_name(obj)
+        if name:
+            name_parts = name.split(" ")
+            if len(name_parts) >= 1:
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+                users = User.objects.filter(first_name__iexact=name_parts[0])
+                if len(name_parts) > 1:
+                    users = users.filter(last_name__iexact=" ".join(name_parts[1:]))
+                user = users.first()
+                if user and hasattr(user, 'avatar') and user.avatar:
+                    request = self.context.get('request')
+                    if request:
+                        return request.build_absolute_uri(user.avatar.url)
+                    return user.avatar.url
         return None
 
     def get_triggered_by_name(self, obj):
@@ -53,6 +69,26 @@ class NotificationSerializer(serializers.ModelSerializer):
             email = getattr(obj.triggered_by, 'email', '')
             if email:
                 return email.split('@')[0]
+                
+        import re
+        if obj.description:
+            match = re.search(r'by (.+)$', obj.description)
+            if match:
+                return match.group(1).replace('"', '').replace("'", "").strip()
+        
+        if obj.action:
+            action_str = str(obj.action)
+            if " assigned you to" in action_str:
+                return action_str.split(" assigned ")[0]
+            if " commented on" in action_str:
+                return action_str.split(" commented ")[0]
+            if " updated " in action_str:
+                return action_str.split(" updated ")[0]
+            if " set a blocker" in action_str:
+                return action_str.split(" set ")[0]
+            if " cleared blocker" in action_str:
+                return action_str.split(" cleared ")[0]
+                
         return None
 
 class NotificationCreateSerializer(serializers.ModelSerializer):
