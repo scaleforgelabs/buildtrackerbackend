@@ -254,6 +254,25 @@ class TaskCreateSerializer(serializers.ModelSerializer):
                 severity='info'
             )
             
+            # Notify admins/owners
+            from workspaces.models import WorkspaceMember
+            workspace_admins = WorkspaceMember.objects.filter(
+                workspace=workspace,
+                role__in=['Owner', 'Admin']
+            ).exclude(user=user)
+            
+            for member in workspace_admins:
+                if member.user != task.assigned_to:
+                    Notification.objects.create(
+                        user=member.user,
+                        triggered_by=user,
+                        workspace=workspace,
+                        action=f'New Task Created: {task.task_name}',
+                        description=f'{assigner_name} created a new task',
+                        note_type='task_created',
+                        severity='info'
+                    )
+
             # Send email notification after transaction commits
             from django.db import transaction
             transaction.on_commit(lambda x=task.id: send_task_assignment_email.delay(str(x)))

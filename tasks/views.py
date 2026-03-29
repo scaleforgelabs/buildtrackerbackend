@@ -230,16 +230,7 @@ async def workspace_tasks(request, workspaceId):
 
                     create_user_activity_log(user=request.user, activity_type='api_request', workspace=workspace, module='tasks', request=request)
 
-                    if task.assigned_to:
-                        create_notification(
-                            user=task.assigned_to,
-                            workspace=workspace,
-                            action=f"Task Assigned: {task.task_name}",
-                            description=f"You have been assigned a new task by {request.user.first_name or request.user.email}",
-                            note_type="task_assigned",
-                            severity="info",
-                            triggered_by=request.user
-                        )
+                    # Task assignment email handled in serializers.py
 
                     return Response({
                         'task': TaskSerializer(task, context={'request': request}).data,
