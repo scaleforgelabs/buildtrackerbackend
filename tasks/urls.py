@@ -15,4 +15,6 @@ urlpatterns = [
     path('<uuid:workspaceId>/tasks/by-sprint/<int:sprint>/', views.tasks_by_sprint, name='tasks_by_sprint'),
     path('<uuid:workspaceId>/tasks/<uuid:taskId>/comments/', views.task_comments, name='task_comments'),
     path('<uuid:workspaceId>/tasks/<uuid:taskId>/comments/<uuid:commentId>/', views.task_comment_detail, name='task_comment_detail'),
+    path('<uuid:workspaceId>/tasks/attachments/<uuid:attachmentId>/download/', views.download_task_attachment, name='task_attachment_download'),
+    path('<uuid:workspaceId>/tasks/comments/attachments/<uuid:attachmentId>/download/', views.download_task_comment_attachment, name='task_comment_attachment_download'),
 ]

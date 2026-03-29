@@ -10,7 +10,8 @@ from django.db.models import Q
 from drf_spectacular.utils import extend_schema
 from datetime import datetime
 
-from .models import Task, TaskComment, TaskCommentAttachment, PersonalTask
+from .models import Task, TaskComment, TaskCommentAttachment, PersonalTask, TaskAttachment
+from django.http import FileResponse, Http404
 from .serializers import (
     TaskSerializer, TaskCreateSerializer, TaskCommentSerializer, 
     TaskAttachmentSerializer, TaskCommentCreateSerializer, PersonalTaskSerializer
@@ -1271,4 +1272,62 @@ async def personal_task_detail_view(request, pk):
             serializer = PersonalTaskSerializer(task)
             return Response(serializer.data)
             
+    return await _sync_logic()
+
+
+@extend_schema(
+    tags=["Tasks"],
+    summary="Download Task Attachment",
+    description="Download a specific attachment from a task",
+    responses={200: {'description': 'File stream'}}
+)
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+async def download_task_attachment(request, workspaceId, attachmentId):
+    @sync_to_async
+    def _sync_logic():
+        workspace = get_object_or_404(Workspace, id=workspaceId)
+        attachment = get_object_or_404(TaskAttachment, id=attachmentId, task__workspace=workspace)
+        
+        if not check_workspace_permission(request.user, workspace):
+            return Response({'error': 'Permission denied: You must be a member of this workspace'}, status=status.HTTP_403_FORBIDDEN)
+            
+        if not attachment.file:
+            return Response({'error': 'Attachment file not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+        create_user_activity_log(user=request.user, activity_type='api_request', workspace=workspace, module='tasks', request=request)
+        
+        response = FileResponse(attachment.file.open(), content_type='application/octet-stream')
+        response['Content-Disposition'] = f'attachment; filename="{attachment.file_name}"'
+        return response
+    
+    return await _sync_logic()
+
+
+@extend_schema(
+    tags=["Tasks"],
+    summary="Download Task Comment Attachment",
+    description="Download a specific attachment from a task comment",
+    responses={200: {'description': 'File stream'}}
+)
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+async def download_task_comment_attachment(request, workspaceId, attachmentId):
+    @sync_to_async
+    def _sync_logic():
+        workspace = get_object_or_404(Workspace, id=workspaceId)
+        attachment = get_object_or_404(TaskCommentAttachment, id=attachmentId, comment__task__workspace=workspace)
+        
+        if not check_workspace_permission(request.user, workspace):
+            return Response({'error': 'Permission denied: You must be a member of this workspace'}, status=status.HTTP_403_FORBIDDEN)
+            
+        if not attachment.file:
+            return Response({'error': 'Attachment file not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+        create_user_activity_log(user=request.user, activity_type='api_request', workspace=workspace, module='tasks', request=request)
+        
+        response = FileResponse(attachment.file.open(), content_type='application/octet-stream')
+        response['Content-Disposition'] = f'attachment; filename="{attachment.file_name}"'
+        return response
+    
     return await _sync_logic()
