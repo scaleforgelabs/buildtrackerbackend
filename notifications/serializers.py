@@ -47,10 +47,25 @@ class NotificationSerializer(serializers.ModelSerializer):
             name_parts = name.split(" ")
             if len(name_parts) >= 1:
                 from django.contrib.auth import get_user_model
+                from django.db.models import Q
                 User = get_user_model()
-                users = User.objects.filter(first_name__iexact=name_parts[0])
+                
+                # Broaden the search to handle 3-word names like 'Muaz Balogun Adeleye'
+                # where first_name might be 'Muaz' and last_name 'Balogun Adeleye', 
+                # or first_name 'Muaz Balogun' and last_name 'Adeleye'
+                
+                users = User.objects.filter(
+                    Q(first_name__icontains=name_parts[0]) | 
+                    Q(last_name__icontains=name_parts[0])
+                )
+                
                 if len(name_parts) > 1:
-                    users = users.filter(last_name__iexact=" ".join(name_parts[1:]))
+                    last_word = name_parts[-1]
+                    users = users.filter(
+                        Q(first_name__icontains=last_word) | 
+                        Q(last_name__icontains=last_word)
+                    )
+                
                 user = users.first()
                 if user and hasattr(user, 'avatar') and user.avatar:
                     request = self.context.get('request')
