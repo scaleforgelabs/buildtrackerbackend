@@ -7,10 +7,12 @@ User = get_user_model()
 class NotificationSerializer(serializers.ModelSerializer):
     user_avatar = serializers.SerializerMethodField()
     user_name = serializers.SerializerMethodField()
+    triggered_by_avatar = serializers.SerializerMethodField()
+    triggered_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Notification
-        fields = ['id', 'user', 'workspace', 'action', 'description', 'note_type', 'severity', 'is_read', 'created_at', 'read_at', 'user_avatar', 'user_name']
+        fields = ['id', 'user', 'workspace', 'action', 'description', 'note_type', 'severity', 'is_read', 'created_at', 'read_at', 'user_avatar', 'user_name', 'triggered_by', 'triggered_by_avatar', 'triggered_by_name']
         read_only_fields = ['id', 'user', 'created_at', 'read_at']
         
     def get_user_avatar(self, obj):
@@ -32,6 +34,26 @@ class NotificationSerializer(serializers.ModelSerializer):
             if email:
                 return email.split('@')[0]
         return "User"
+
+    def get_triggered_by_avatar(self, obj):
+        if hasattr(obj, 'triggered_by') and obj.triggered_by and hasattr(obj.triggered_by, 'avatar') and obj.triggered_by.avatar:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.triggered_by.avatar.url)
+            return obj.triggered_by.avatar.url
+        return None
+
+    def get_triggered_by_name(self, obj):
+        if hasattr(obj, 'triggered_by') and obj.triggered_by:
+            first = getattr(obj.triggered_by, 'first_name', '')
+            last = getattr(obj.triggered_by, 'last_name', '')
+            full_name = f"{first} {last}".strip()
+            if full_name:
+                return full_name
+            email = getattr(obj.triggered_by, 'email', '')
+            if email:
+                return email.split('@')[0]
+        return None
 
 class NotificationCreateSerializer(serializers.ModelSerializer):
     workspace_id = serializers.UUIDField(required=False, allow_null=True)

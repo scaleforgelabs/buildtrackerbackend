@@ -13,6 +13,7 @@ def task_notification(sender, instance, created, **kwargs):
         if task.assigned_to:
             Notification.objects.create(
                 user=task.assigned_to,
+                triggered_by=task.created_by,
                 workspace=task.workspace,
                 action=f'Task Assigned: {task.task_name}',
                 description=f'You have been assigned to "{task.task_name}"',
@@ -29,6 +30,7 @@ def task_notification(sender, instance, created, **kwargs):
             if member.user != task.assigned_to:
                 Notification.objects.create(
                     user=member.user,
+                    triggered_by=task.created_by,
                     workspace=task.workspace,
                     action=f'New Task Created: {task.task_name}',
                     description=f'{task.created_by.first_name or task.created_by.email} created a new task',
@@ -40,6 +42,7 @@ def task_notification(sender, instance, created, **kwargs):
             if task.assigned_to:
                 Notification.objects.create(
                     user=task.assigned_to,
+                    triggered_by=task.created_by,
                     workspace=task.workspace,
                     action=f'Task Assigned: {task.task_name}',
                     description=f'You have been assigned to "{task.task_name}"',
@@ -51,6 +54,7 @@ def task_notification(sender, instance, created, **kwargs):
             if task.assigned_to:
                 Notification.objects.create(
                     user=task.assigned_to,
+                    triggered_by=task.created_by,
                     workspace=task.workspace,
                     action=f'Task Status Updated: {task.task_name}',
                     description=f'Task status changed from {task._old_status} to {task.status}',
@@ -62,6 +66,7 @@ def task_notification(sender, instance, created, **kwargs):
             if task.assigned_to:
                 Notification.objects.create(
                     user=task.assigned_to,
+                    triggered_by=task.created_by,
                     workspace=task.workspace,
                     action=f'Critical Issue: {task.task_name}',
                     description=f'Task has a blocker: {task.blocker_reason or "No reason provided"}',
@@ -78,6 +83,7 @@ def task_notification(sender, instance, created, **kwargs):
             for member in workspace_admins:
                 Notification.objects.create(
                     user=member.user,
+                    triggered_by=task.created_by,
                     workspace=task.workspace,
                     action=f'Critical Issue: {task.task_name}',
                     description=f'Task has a blocker: {task.blocker_reason or "No reason provided"}',
@@ -107,6 +113,7 @@ def task_deleted_notification(sender, instance, **kwargs):
     if task.assigned_to:
         Notification.objects.create(
             user=task.assigned_to,
+            triggered_by=task.created_by,
             workspace=task.workspace,
             action=f'Task Deleted: {task.task_name}',
             description=f'Task "{task.task_name}" has been deleted',
@@ -128,6 +135,7 @@ def workspace_member_notification(sender, instance, created, **kwargs):
         for existing_member in existing_members:
             Notification.objects.create(
                 user=existing_member.user,
+                triggered_by=member.user,
                 workspace=member.workspace,
                 action='Team Update',
                 description=f'New member joined your workspace: {member.user.first_name or member.user.email}',
@@ -138,6 +146,7 @@ def workspace_member_notification(sender, instance, created, **kwargs):
         
         Notification.objects.create(
             user=member.user,
+            triggered_by=member.user,
             workspace=member.workspace,
             action='Welcome to Workspace',
             description=f'You have joined {member.workspace.name}',
@@ -155,6 +164,7 @@ def task_comment_notification(sender, instance, created, **kwargs):
         if task.assigned_to and task.assigned_to != comment.user:
             Notification.objects.create(
                 user=task.assigned_to,
+                triggered_by=comment.user,
                 workspace=task.workspace,
                 action=f'New Comment: {task.task_name}',
                 description=f'{comment.user.first_name or comment.user.email} commented on your task',

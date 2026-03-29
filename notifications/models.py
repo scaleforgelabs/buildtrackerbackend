@@ -14,6 +14,7 @@ class Notification(models.Model):
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    triggered_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='triggered_notifications')
     workspace = models.ForeignKey('workspaces.Workspace', on_delete=models.CASCADE, related_name='notifications', null=True, blank=True)
     action = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)

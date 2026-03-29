@@ -237,7 +237,8 @@ async def workspace_tasks(request, workspaceId):
                             action=f"Task Assigned: {task.task_name}",
                             description=f"You have been assigned a new task by {request.user.first_name or request.user.email}",
                             note_type="task_assigned",
-                            severity="info"
+                            severity="info",
+                            triggered_by=request.user
                         )
 
                     return Response({
@@ -398,6 +399,7 @@ async def task_detail(request, workspaceId, id):
                         if recipient:
                             Notification.objects.create(
                                 user=recipient,
+                                triggered_by=request.user,
                                 workspace=workspace,
                                 action=f"{trigger_name} updated task status: {task.task_name}",
                                 description=f"Status changed from {old_status} to {task.status}",
@@ -428,6 +430,7 @@ async def task_detail(request, workspaceId, id):
                         if recipient:
                             Notification.objects.create(
                                 user=recipient,
+                                triggered_by=request.user,
                                 workspace=workspace,
                                 action=f"{trigger_name} updated task: {task.task_name}",
                                 description=f"Field(s) changed: {', '.join(other_updated_fields)}",
@@ -607,6 +610,7 @@ async def update_task_status(request, workspaceId, id):
                 if recipient:
                     Notification.objects.create(
                         user=recipient,
+                        triggered_by=request.user,
                         workspace=workspace,
                         action=f"{trigger_name} updated status: {task.task_name}",
                         description=f"Changed from {old_status} to {task.status}",
@@ -688,6 +692,7 @@ async def assign_task(request, workspaceId, id):
                     if recipient:
                         Notification.objects.create(
                             user=recipient,
+                            triggered_by=request.user,
                             workspace=workspace,
                             action=f"{trigger_name} assigned task: {task.task_name}",
                             description=f"Assigned to {task.assigned_to.email}",
@@ -781,6 +786,7 @@ async def update_task_blocker(request, workspaceId, id):
                 if recipient:
                     Notification.objects.create(
                         user=recipient,
+                        triggered_by=request.user,
                         workspace=task.workspace,
                         action=f"{trigger_name} set a blocker on: {task.task_name}",
                         description=f"Reason: {blocker_reason or 'No reason provided'}",
@@ -816,6 +822,7 @@ async def update_task_blocker(request, workspaceId, id):
                     if recipient:
                         Notification.objects.create(
                             user=recipient,
+                            triggered_by=request.user,
                             workspace=task.workspace,
                             action=f"{trigger_name} cleared blocker on: {task.task_name}",
                             description=f"Task is no longer blocked",
@@ -1035,6 +1042,7 @@ async def task_comments(request, workspaceId, taskId):
                     if recipient:
                         Notification.objects.create(
                             user=recipient,
+                            triggered_by=request.user,
                             workspace=workspace,
                             action=f"{trigger_name} commented on: {task.task_name}",
                             description=f"'{task.task_name}'",
@@ -1139,6 +1147,7 @@ async def task_comment_detail(request, workspaceId, taskId, commentId):
                     if recipient:
                         Notification.objects.create(
                             user=recipient,
+                            triggered_by=request.user,
                             workspace=workspace,
                             action=f"{trigger_name} updated a comment: {task.task_name}",
                             description=f"'{task.task_name}'",

@@ -283,11 +283,12 @@ def create_user_activity_log(user, activity_type, workspace=None, module='', end
         session_id
     )
 
-def create_notification(user, workspace, action, description=None, note_type=None, severity='info'):
+def create_notification(user, workspace, action, description=None, note_type=None, severity='info', triggered_by=None):
     from notifications.tasks import create_notification_task
     
     user_id = user.id if user else None
     workspace_id = workspace.id if workspace else None
+    triggered_by_id = triggered_by.id if triggered_by else None
     
     if user_id:
         create_notification_task.delay(
@@ -296,7 +297,8 @@ def create_notification(user, workspace, action, description=None, note_type=Non
             action,
             description,
             note_type,
-            severity
+            severity,
+            triggered_by_id
         )
 
 def create_system_event_log(event_type, severity, message, source, workspace=None, error_code='', stack_trace='', metadata=None):

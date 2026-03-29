@@ -246,6 +246,7 @@ class TaskCreateSerializer(serializers.ModelSerializer):
                 f.write(log_msg)
             Notification.objects.create(
                 user=task.assigned_to,
+                triggered_by=user,
                 workspace=workspace,
                 action=f"{assigner_name} assigned you to: {task.task_name}",
                 description=f"You have been assigned to \"{task.task_name}\" by {assigner_name}",
