@@ -440,7 +440,8 @@ async def workspace_members(request, id):
                     action=f"Added to Workspace: {workspace.name}",
                     description=f"You have been added to {workspace.name} as {member.role}",
                     note_type="workspace_access",
-                    severity="success"
+                    severity="success",
+                    triggered_by=request.user
                 )
 
                 create_user_activity_log(user=request.user, activity_type='api_request', workspace=workspace, module='workspaces', request=request)
@@ -560,7 +561,8 @@ async def workspace_member_detail(request, id, userId):
                     action=f"Role Updated in {workspace.name}",
                     description=f"Your role has been updated. New role: {member.role}",
                     note_type="workspace_access",
-                    severity="info"
+                    severity="info",
+                    triggered_by=request.user
                 )
 
                 create_user_activity_log(user=request.user, activity_type='api_request', workspace=workspace, module='workspaces', request=request)
@@ -615,7 +617,8 @@ async def workspace_member_detail(request, id, userId):
                 action=f"Removed from Workspace: {workspace.name}",
                 description=f"You have been removed from {workspace.name}",
                 note_type="workspace_access",
-                severity="warning"
+                severity="warning",
+                triggered_by=request.user
             )
 
             create_user_activity_log(user=request.user, activity_type='api_request', workspace=workspace, module='workspaces', request=request)
@@ -912,7 +915,8 @@ async def workspace_invitation_detail(request, id, invitationId):
                             action=f"New Member Joined: {workspace.name}",
                             description=f"{request.user.first_name or request.user.email} joined the workspace",
                             note_type="member_join",
-                            severity="success"
+                            severity="success",
+                            triggered_by=request.user
                         )
 
             return Response({'invitation': WorkspaceInvitationSerializer(invitation).data})
@@ -1018,7 +1022,8 @@ async def accept_workspace_invitation(request):
                             action=f"New Member Joined: {invitation.workspace.name}",
                             description=f"{request.user.first_name or request.user.email} joined the workspace",
                             note_type="member_join",
-                            severity="success"
+                            severity="success",
+                            triggered_by=request.user
                         )
 
             return Response({
