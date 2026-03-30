@@ -1,7 +1,7 @@
 from celery import shared_task
 from django.core.cache import cache
 import time
-from django.core.mail import send_mail
+from core.messaging import send_beautiful_email
 from django.conf import settings
 from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
@@ -32,10 +32,9 @@ def cleanup_cache():
 
 @shared_task
 def send_email_task(subject, message, recipient_list, fail_silently=False):
-    send_mail(
+    send_beautiful_email(
         subject=subject,
         message=message,
-        from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=recipient_list,
         fail_silently=fail_silently,
     )
@@ -49,10 +48,9 @@ def send_dual_notification_task(user_id, subject, message, fail_silently=False):
         return
 
     try:
-        email_sent = send_mail(
+        email_sent = send_beautiful_email(
             subject=subject,
             message=message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[user.email],
             fail_silently=fail_silently
         )

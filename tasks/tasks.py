@@ -1,5 +1,5 @@
 from celery import shared_task
-from django.core.mail import send_mail
+from core.messaging import send_beautiful_email
 from django.conf import settings
 from django.utils import timezone
 import traceback
@@ -92,10 +92,9 @@ def send_task_due_reminder_email(task_id):
             View task: {settings.FRONTEND_URL}/{task.workspace.id}/tasks/{task.id}
             """
             
-            send_mail(
+            send_beautiful_email(
                 subject=subject,
                 message=message,
-                from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[task.assigned_to.email],
                 fail_silently=False,
             )

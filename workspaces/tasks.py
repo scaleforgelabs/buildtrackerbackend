@@ -1,5 +1,5 @@
 from celery import shared_task
-from django.core.mail import send_mail
+from core.messaging import send_beautiful_email
 from django.conf import settings
 from django.utils import timezone
 from core.messaging import send_dual_notification
@@ -56,10 +56,9 @@ def send_workspace_invitation_email(invitation_id):
             user = User.objects.get(email=invitation.email)
             send_dual_notification(user, subject, message, fail_silently=False)
         except User.DoesNotExist:
-            send_mail(
+            send_beautiful_email(
                 subject=subject,
                 message=message,
-                from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[invitation.email],
                 fail_silently=False,
             )

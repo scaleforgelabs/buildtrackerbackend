@@ -3,8 +3,7 @@ from django.utils import timezone
 from django.conf import settings
 from subscriptions.models import Subscription, PaymentHistory
 from subscriptions.utils import charge_paystack_authorization, charge_flutterwave_token, get_plan_price
-from core.messaging import send_dual_notification
-from django.core.mail import send_mail
+from core.messaging import send_dual_notification, send_beautiful_email
 import datetime
 
 class Command(BaseCommand):
@@ -289,10 +288,9 @@ class Command(BaseCommand):
             )
         else:
             # Fallback for cases where owner might be missing (shouldn't happen)
-            send_mail(
-                subject,
-                message,
-                settings.DEFAULT_FROM_EMAIL,
-                [sub.billing_email or sub.organization.owner.email],
+            send_beautiful_email(
+                subject=subject,
+                message=message,
+                recipient_list=[sub.billing_email or sub.organization.owner.email],
                 fail_silently=True,
             )
