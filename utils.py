@@ -172,7 +172,7 @@ def validate_file_security(file, max_size_mb=10, allowed_extensions=None):
 def check_storage_limit(user, file_size):
     from organizations.user_org_views import calculate_user_storage_and_files, get_plan_limits
     storage_data = calculate_user_storage_and_files(user)
-    limits = get_plan_limits(user.plan_type)
+    limits = get_plan_limits(user.plan_type, user)
     file_size_mb = file_size / (1024 * 1024)
     invalidate_user_cache(user)
     return storage_data['storage_used_mb'] + file_size_mb <= limits['max_storage_mb']

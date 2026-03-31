@@ -170,7 +170,7 @@ async def workspaces_list_create(request):
 
             from organizations.user_org_views import calculate_user_stats, get_plan_limits
             current_usage = calculate_user_stats(request.user)
-            limits = get_plan_limits(request.user.plan_type)
+            limits = get_plan_limits(request.user.plan_type, request.user)
 
             if current_usage['workspace_count'] >= limits['max_workspaces']:
                 return Response(
@@ -400,7 +400,7 @@ async def workspace_members(request, id):
 
             from organizations.user_org_views import calculate_user_stats, get_plan_limits
             current_usage = calculate_user_stats(workspace.owner)
-            limits = get_plan_limits(workspace.owner.plan_type)
+            limits = get_plan_limits(workspace.owner.plan_type, workspace.owner)
 
             if current_usage['user_count'] >= limits['max_users']:
                 return Response(
@@ -770,7 +770,7 @@ async def workspace_invitations(request, id):
 
             from organizations.user_org_views import calculate_user_stats, get_plan_limits
             current_usage = calculate_user_stats(workspace.owner)
-            limits = get_plan_limits(workspace.owner.plan_type)
+            limits = get_plan_limits(workspace.owner.plan_type, workspace.owner)
 
             if current_usage['total_potential_users'] >= limits['max_users']:
                 return Response(

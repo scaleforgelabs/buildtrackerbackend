@@ -18,8 +18,10 @@ User = get_user_model()
 
 from subscriptions.constants import PLAN_LIMITS
 
-def get_plan_limits(plan_type):
-    """Get plan limits for a given plan type"""
+def get_plan_limits(plan_type, user=None):
+    """Get plan limits for a given plan type, upgraded if user is staff"""
+    if user and (user.is_staff or user.is_superuser):
+        return PLAN_LIMITS['business']
     return PLAN_LIMITS.get(plan_type, PLAN_LIMITS['free'])
 
 def calculate_user_storage_and_files(user):
@@ -182,7 +184,7 @@ def get_user_organization(request, id):
     usage = calculate_user_stats(user)
     
     # Get plan limits
-    limits = get_plan_limits(user.plan_type)
+    limits = get_plan_limits(user.plan_type, user)
     
     # Build organization response
     full_name = f"{user.first_name} {user.last_name}".strip() or user.email
@@ -193,7 +195,7 @@ def get_user_organization(request, id):
             'name': full_name,
             'email': user.email,
             'billing_email': user.billing_email or user.email,
-            'plan_type': user.plan_type,
+            'plan_type': 'business' if user.is_staff or user.is_superuser else user.plan_type,
             'created_at': user.created_at.isoformat()
         },
         'usage': usage,
@@ -282,7 +284,7 @@ def update_user_organization(request, id):
             'name': full_name,
             'email': user.email,
             'billing_email': user.billing_email or user.email,
-            'plan_type': user.plan_type,
+            'plan_type': 'business' if user.is_staff or user.is_superuser else user.plan_type,
             'created_at': user.created_at.isoformat()
         }
     })
@@ -392,7 +394,7 @@ def get_user_organization_usage(request, id):
     current_usage = calculate_user_stats(user)
     
     # Get plan limits
-    limits = get_plan_limits(user.plan_type)
+    limits = get_plan_limits(user.plan_type, user)
     
     # Calculate usage percentages
     usage_percentage = {
@@ -523,7 +525,7 @@ def check_user_organization_limits(request, id):
     current_usage = calculate_user_stats(user)
     
     # Get plan limits
-    limits = get_plan_limits(user.plan_type)
+    limits = get_plan_limits(user.plan_type, user)
     
     # Check what's allowed
     can_add_user = current_usage['total_potential_users'] < limits['max_users']

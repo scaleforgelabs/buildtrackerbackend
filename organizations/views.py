@@ -235,7 +235,7 @@ async def get_organization_usage(request, id):
         return Response({
             'current_usage': current_usage,
             'limits': limits,
-            'plan_type': organization.plan_type,
+            'plan_type': organization.effective_plan_type,
             'usage_percentage': usage_percentage
         })
 
@@ -702,7 +702,7 @@ async def get_my_organizations(request):
                 'role': 'owner',
                 'is_owner': True,
                 'member_count': org.annotated_member_count,
-                'plan_type': org.plan_type,
+                'plan_type': org.effective_plan_type,
                 'joined_at': org.created_at.isoformat()
             })
 
@@ -718,7 +718,7 @@ async def get_my_organizations(request):
                 'role': membership.role,
                 'is_owner': False,
                 'member_count': membership.org_member_count,
-                'plan_type': membership.organization.plan_type,
+                'plan_type': membership.organization.effective_plan_type,
                 'joined_at': membership.joined_at.isoformat()
             })
 

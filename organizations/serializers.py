@@ -41,6 +41,7 @@ class OrganizationSerializer(serializers.ModelSerializer):
     member_count = serializers.ReadOnlyField()
     plan_limits = serializers.SerializerMethodField()
     usage = OrganizationUsageSerializer(read_only=True)
+    plan_type = serializers.SerializerMethodField()
     
     class Meta:
         model = Organization
@@ -50,6 +51,9 @@ class OrganizationSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'owner', 'plan_type', 'created_at', 'updated_at']
     
+    def get_plan_type(self, obj):
+        return obj.effective_plan_type
+
     def get_plan_limits(self, obj):
         return obj.get_plan_limits()
     

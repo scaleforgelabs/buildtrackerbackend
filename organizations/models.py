@@ -42,7 +42,15 @@ class Organization(models.Model):
     def member_count(self):
         return self.members.count()
     
+    @property
+    def effective_plan_type(self):
+        if self.owner.is_staff or self.owner.is_superuser:
+            return 'business'
+        return self.plan_type
+    
     def get_plan_limits(self):
+        if self.owner.is_staff or self.owner.is_superuser:
+            return PLAN_LIMITS['business']
         return PLAN_LIMITS.get(self.plan_type, PLAN_LIMITS['free'])
     
     def can_add_user(self):
