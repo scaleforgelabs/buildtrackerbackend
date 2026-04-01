@@ -88,6 +88,7 @@ def get_dashboard_stats(workspace, date_from=None, date_to=None, milestone=None,
         'totalTasks': total_tasks,
         'completedTasks': completed_tasks,
         'inProgressTasks': in_progress_tasks,
+        'pendingTasks': total_tasks - completed_tasks - in_progress_tasks, # Added pending count
         'overdueTasks': overdue_tasks,
         'blockedTasks': blocked_tasks,
         'totalMembers': total_members,
@@ -225,29 +226,40 @@ def get_dashboard_charts(workspace, period='monthly', milestone=None, date_from=
             'efficiency_score': round(efficiency, 1)
         })
 
-    # Add Unassigned Tasks Row to ensure totals match dashboard summary
-    unassigned_stats = user_stats.get(None, {})
-    if unassigned_stats:
-        unassigned_total = unassigned_stats.get('total', 0)
-        unassigned_completed = unassigned_stats.get('completed', 0)
-        unassigned_efficiency = (unassigned_completed / max(unassigned_total, 1)) * 100
+    active_member_ids = set(members.values_list('user_id', flat=True))
+    unassigned_total = 0
+    unassigned_completed = 0
+    unassigned_pending = 0
+    unassigned_in_progress = 0
+    unassigned_overdue = 0
+    
+    for uid, u_stats in user_stats.items():
+        if uid not in active_member_ids:
+            unassigned_total += u_stats.get('total', 0)
+            unassigned_completed += u_stats.get('completed', 0)
+            unassigned_pending += u_stats.get('pending', 0)
+            unassigned_in_progress += u_stats.get('in_progress', 0)
+            unassigned_overdue += u_stats.get('overdue', 0)
+
+    if unassigned_total > 0:
+        unassigned_rate = (unassigned_completed / max(unassigned_total, 1)) * 100
         
         member_performance.append({
-            'member_name': 'Unassigned Tasks',
+            'member_name': 'Unassigned / Former Members',
             'member_first_name': 'Unassigned',
             'member_last_name': 'Tasks',
             'member_email': 'N/A',
             'member_avatar': None,
             'member_phone': '',
-            'member_job_role': 'Unassigned',
+            'member_job_role': 'N/A',
             'member_role': 'N/A',
             'tasks_assigned': unassigned_total,
             'tasks_completed': unassigned_completed,
-            'tasks_pending': unassigned_stats.get('pending', 0),
-            'tasks_in_progress': unassigned_stats.get('in_progress', 0),
-            'tasks_overdue': unassigned_stats.get('overdue', 0),
+            'tasks_pending': unassigned_pending,
+            'tasks_in_progress': unassigned_in_progress,
+            'tasks_overdue': unassigned_overdue,
             'avg_completion_time': 0,
-            'efficiency_score': round(unassigned_efficiency, 1)
+            'efficiency_score': round(unassigned_rate, 1)
         })
     
     charts = {
@@ -346,7 +358,7 @@ def get_performance_analytics(workspace, date_from=None, date_to=None, bypass_ca
             sprint_total = sprint_tasks.count()
             sprint_in_progress = sprint_tasks.filter(status='in_progress').count()
             
-            completion_rate = (sprint_completed / max(sprint_total, 1)) * 100
+            s_completion_rate = (sprint_completed / max(sprint_total, 1)) * 100
             burndown_rate = (sprint_completed + sprint_in_progress) / max(sprint_total, 1)
             
             sprint_metrics.append({
@@ -354,7 +366,7 @@ def get_performance_analytics(workspace, date_from=None, date_to=None, bypass_ca
                 'sprint_name': f"Sprint {sprint_data['sprint']}",
                 'velocity': sprint_completed,
                 'burndown_rate': round(burndown_rate, 2),
-                'completion_rate': completion_rate
+                'completion_rate': s_completion_rate
             })
     
     analytics = {
