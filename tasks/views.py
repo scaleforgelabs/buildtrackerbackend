@@ -18,7 +18,7 @@ from .serializers import (
 )
 from .tasks import send_task_assignment_email, send_task_status_update_email
 from workspaces.models import Workspace, WorkspaceMember
-from utils import sanitize_input, check_workspace_permission, create_workspace_log, create_audit_log, create_user_activity_log, create_notification
+from utils import sanitize_input, check_workspace_permission, create_workspace_log, create_audit_log, create_user_activity_log, create_notification, is_resource_owner_or_admin
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 25
@@ -186,8 +186,8 @@ async def workspace_tasks(request, workspaceId):
                 })
 
             elif request.method == 'POST':
-                if not check_workspace_permission(request.user, workspace, ['Owner', 'Admin']):
-                    return Response({'error': 'Only owners and admins can create tasks'}, status=status.HTTP_403_FORBIDDEN)
+                if not check_workspace_permission(request.user, workspace, ['Owner', 'Admin', 'Member']):
+                    return Response({'error': 'Permission denied: You must be a member of this workspace to create tasks'}, status=status.HTTP_403_FORBIDDEN)
 
                 clean_data = {}
                 for key, value in request.data.items():
@@ -319,8 +319,8 @@ async def task_detail(request, workspaceId, id):
             })
 
         elif request.method == 'PUT':
-            if not check_workspace_permission(request.user, workspace, ['Owner', 'Admin']):
-                return Response({'error': 'Only owners and admins can update tasks'}, status=status.HTTP_403_FORBIDDEN)
+            if not is_resource_owner_or_admin(request.user, workspace, task):
+                return Response({'error': 'Only the task creator or workspace admins can update this task'}, status=status.HTTP_403_FORBIDDEN)
 
             update_data = {}
             for key, value in request.data.items():
@@ -479,8 +479,8 @@ async def task_detail(request, workspaceId, id):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         elif request.method == 'DELETE':
-            if not check_workspace_permission(request.user, workspace, ['Owner', 'Admin']):
-                return Response({'error': 'Only owners and admins can delete tasks'}, status=status.HTTP_403_FORBIDDEN)
+            if not is_resource_owner_or_admin(request.user, workspace, task):
+                return Response({'error': 'Only the task creator or workspace admins can delete this task'}, status=status.HTTP_403_FORBIDDEN)
 
             task_name = task.task_name
             task_id = task.id
@@ -644,8 +644,8 @@ async def assign_task(request, workspaceId, id):
         workspace = get_object_or_404(Workspace, id=workspaceId)
         task = get_object_or_404(Task, id=id, workspace=workspace)
 
-        if not check_workspace_permission(request.user, workspace, ['Owner', 'Admin']):
-            return Response({'error': 'Only owners and admins can assign tasks'}, status=status.HTTP_403_FORBIDDEN)
+        if not is_resource_owner_or_admin(request.user, workspace, task):
+            return Response({'error': 'Only the task creator or workspace admins can assign this task'}, status=status.HTTP_403_FORBIDDEN)
 
         assigned_to = request.data.get('assigned_to')
         if assigned_to:
@@ -734,8 +734,9 @@ async def update_task_blocker(request, workspaceId, id):
         is_assignee = task.assigned_to == request.user
         is_admin_or_owner = check_workspace_permission(request.user, workspace, ['Owner', 'Admin'])
 
-        if not (is_assignee or is_admin_or_owner):
-            return Response({'error': 'Only task assignee or workspace admins can update blockers'}, status=status.HTTP_403_FORBIDDEN)
+        is_creator = task.created_by == request.user
+        if not (is_assignee or is_admin_or_owner or is_creator):
+            return Response({'error': 'Only task creator, assignee or workspace admins can update blockers'}, status=status.HTTP_403_FORBIDDEN)
 
         has_blocker = request.data.get('has_blocker')
         blocker_reason = request.data.get('blocker_reason')
