@@ -214,6 +214,7 @@ AWS_S3_FILE_OVERWRITE = True
 AWS_DEFAULT_ACL = None
 AWS_S3_VERIFY = True
 AWS_QUERYSTRING_AUTH = True  # Set to False if your bucket is public
+AWS_QUERYSTRING_EXPIRE = 86400  # 24 hours (matches frontend cache)
 
 # Modern Django Storage Configuration (Required for Django 4.2+)
 STORAGES = {
