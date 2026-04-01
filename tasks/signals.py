@@ -1,6 +1,7 @@
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.core.cache import cache
+from django.db import transaction
 from .models import Task
 from workspaces.models import WorkspaceMember, WorkspaceSettings
 from reports.models import Report
@@ -19,11 +20,11 @@ def clear_workspace_analytics_cache(workspace_id):
 
 @receiver(post_save, sender=Task)
 def task_saved_handler(sender, instance, **kwargs):
-    clear_workspace_analytics_cache(instance.workspace_id)
+    transaction.on_commit(lambda: clear_workspace_analytics_cache(instance.workspace_id))
 
 @receiver(post_delete, sender=Task)
 def task_deleted_handler(sender, instance, **kwargs):
-    clear_workspace_analytics_cache(instance.workspace_id)
+    transaction.on_commit(lambda: clear_workspace_analytics_cache(instance.workspace_id))
 
 @receiver(post_save, sender=WorkspaceMember)
 def member_saved_handler(sender, instance, **kwargs):
