@@ -164,9 +164,6 @@ async def workspace_tasks(request, workspaceId):
                     'attachments', 'comments__user', 'comments__attachments'
                 )
 
-                if not check_workspace_permission(request.user, workspace, ['Owner', 'Admin']):
-                    tasks = tasks.filter(Q(assigned_to=request.user) | Q(created_by=request.user))
-
                 filtered_tasks = get_filtered_tasks(tasks, request)
 
                 paginator = StandardResultsSetPagination()
