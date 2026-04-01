@@ -2,21 +2,20 @@ from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.core.cache import cache
 from django.db import transaction
+import time
 from .models import Task
 from workspaces.models import WorkspaceMember, WorkspaceSettings
 from reports.models import Report
 
 def clear_workspace_analytics_cache(workspace_id):
- 
+    """
+    Increments the version of a workspace's analytics cache, 
+    effectively invalidating all cached analytics for that workspace.
+    """
     version_key = f"workspace_analytics_version_{workspace_id}"
-    try:
-        cache.incr(version_key)
-    except (ValueError, TypeError, Exception):
-        # Set to 2 because 1 is the default value in the analytics view.
-        # This ensures the cache key changes immediately.
-        cache.set(version_key, 2, 86400)
-    
-    print(f"Invalidated analytics cache for workspace {workspace_id}")
+    new_version = int(time.time()) # Use a timestamp to ensure uniqueness and freshness
+    cache.set(version_key, new_version, 86400 * 7) # Keep the version valid for 7 days
+    print(f"DEBUG: Invalidated analytics for workspace {workspace_id}. New version: {new_version}")
 
 @receiver(post_save, sender=Task)
 def task_saved_handler(sender, instance, **kwargs):

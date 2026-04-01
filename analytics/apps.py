@@ -5,4 +5,4 @@ class AnalyticsConfig(AppConfig):
     name = 'analytics'
     
     def ready(self):
-        pass
+        import analytics.signals
