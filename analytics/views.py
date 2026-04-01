@@ -55,8 +55,7 @@ def get_dashboard_stats(workspace, date_from=None, date_to=None, milestone=None,
     velocity = round(completed_tasks / max(total_tasks, 1), 2) if total_tasks > 0 else 0
     
     total = max(total_tasks, 1)
-    # Improved Premium Health Score Formula:
-    # (Completed + InProgress*0.6)/Total - (Overdue*0.4 + Blocked*0.4)/Total
+    # Standard Health Score Formula: (Completed + InProgress*0.6)/Total - (Overdue*0.4 + Blocked*0.4)/Total
     positive_impact = (completed_tasks + (in_progress_tasks * 0.6)) / total
     negative_impact = ((overdue_tasks * 0.4) + (blocked_tasks * 0.4)) / total
     health_score = max(0, min(100, round((positive_impact - negative_impact) * 100, 1)))
@@ -224,6 +223,31 @@ def get_dashboard_charts(workspace, period='monthly', milestone=None, date_from=
             'tasks_overdue': overdue,
             'avg_completion_time': avg_time,
             'efficiency_score': round(efficiency, 1)
+        })
+
+    # Add Unassigned Tasks Row to ensure totals match dashboard summary
+    unassigned_stats = user_stats.get(None, {})
+    if unassigned_stats:
+        unassigned_total = unassigned_stats.get('total', 0)
+        unassigned_completed = unassigned_stats.get('completed', 0)
+        unassigned_efficiency = (unassigned_completed / max(unassigned_total, 1)) * 100
+        
+        member_performance.append({
+            'member_name': 'Unassigned Tasks',
+            'member_first_name': 'Unassigned',
+            'member_last_name': 'Tasks',
+            'member_email': 'N/A',
+            'member_avatar': None,
+            'member_phone': '',
+            'member_job_role': 'Unassigned',
+            'member_role': 'N/A',
+            'tasks_assigned': unassigned_total,
+            'tasks_completed': unassigned_completed,
+            'tasks_pending': unassigned_stats.get('pending', 0),
+            'tasks_in_progress': unassigned_stats.get('in_progress', 0),
+            'tasks_overdue': unassigned_stats.get('overdue', 0),
+            'avg_completion_time': 0,
+            'efficiency_score': round(unassigned_efficiency, 1)
         })
     
     charts = {

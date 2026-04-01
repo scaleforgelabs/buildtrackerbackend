@@ -34,6 +34,8 @@ def get_filtered_tasks(queryset, request):
     sprint_filter = request.GET.get('Sprint')
     date_from = request.GET.get('DateFrom')
     date_to = request.GET.get('DateTo')
+    created_by = request.GET.get('CreatedBy')
+    assigned_to = request.GET.get('AssignedTo')
     sort_column = request.GET.get('SortColumn', 'created_at')
     sort_order = request.GET.get('SortOrder', 'desc')
     
@@ -73,6 +75,12 @@ def get_filtered_tasks(queryset, request):
             queryset = queryset.filter(created_at__date__lte=date_to)
         except ValueError:
             pass
+    
+    if created_by:
+        queryset = queryset.filter(created_by_id=created_by)
+    
+    if assigned_to:
+        queryset = queryset.filter(assigned_to_id=assigned_to)
     
     order_prefix = '-' if sort_order == 'desc' else ''
     queryset = queryset.order_by(f"{order_prefix}{sort_column}")
@@ -157,7 +165,7 @@ async def workspace_tasks(request, workspaceId):
                 )
 
                 if not check_workspace_permission(request.user, workspace, ['Owner', 'Admin']):
-                    tasks = tasks.filter(assigned_to=request.user)
+                    tasks = tasks.filter(Q(assigned_to=request.user) | Q(created_by=request.user))
 
                 filtered_tasks = get_filtered_tasks(tasks, request)
 

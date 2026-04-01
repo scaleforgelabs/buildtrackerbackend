@@ -10,8 +10,10 @@ def clear_workspace_analytics_cache(workspace_id):
     version_key = f"workspace_analytics_version_{workspace_id}"
     try:
         cache.incr(version_key)
-    except ValueError:
-        cache.set(version_key, 1, 86400)
+    except (ValueError, TypeError, Exception):
+        # Set to 2 because 1 is the default value in the analytics view.
+        # This ensures the cache key changes immediately.
+        cache.set(version_key, 2, 86400)
     
     print(f"Invalidated analytics cache for workspace {workspace_id}")
 
