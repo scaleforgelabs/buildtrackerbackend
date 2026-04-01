@@ -4,43 +4,39 @@ from django.core.cache import cache
 from django.db import transaction
 import time
 from .models import Task
-from workspaces.models import WorkspaceMember, WorkspaceSettings
-from reports.models import Report
 
 def clear_workspace_analytics_cache(workspace_id):
     """
-    Increments the version of a workspace's analytics cache, 
-    effectively invalidating all cached analytics for that workspace.
+    Clears all cached analytics patterns for a workspace.
+    Uses versioning to avoid expensive keys() lookups where possible.
     """
     version_key = f"workspace_analytics_version_{workspace_id}"
-    new_version = int(time.time()) # Use a timestamp to ensure uniqueness and freshness
-    cache.set(version_key, new_version, 86400 * 7) # Keep the version valid for 7 days
-    print(f"DEBUG: Invalidated analytics for workspace {workspace_id}. New version: {new_version}")
+    new_version = int(time.time() * 1000)
+    cache.set(version_key, new_version, 86400 * 7) # Keep version for 7 days
+    
+    # Aggressive pattern clearing for backends that support it
+    try:
+        patterns = [
+            f"dashboard_stats_{workspace_id}_*",
+            f"dashboard_charts_{workspace_id}_*",
+            f"performance_analytics_{workspace_id}_*",
+            f"trends_analytics_{workspace_id}_*",
+        ]
+        if hasattr(cache, 'keys'):
+            for pattern in patterns:
+                keys = cache.keys(pattern)
+                if keys:
+                    cache.delete_many(keys)
+    except Exception as e:
+        print(f"[CACHE ERROR] Pattern delete failed: {e}")
+        
+    print(f"[CACHE] Workspace {workspace_id} analytics cleared (New v{new_version})")
 
-@receiver(post_save, sender=Task)
+@receiver([post_save, post_delete], sender=Task)
 def task_saved_handler(sender, instance, **kwargs):
-    transaction.on_commit(lambda: clear_workspace_analytics_cache(instance.workspace_id))
-
-@receiver(post_delete, sender=Task)
-def task_deleted_handler(sender, instance, **kwargs):
-    transaction.on_commit(lambda: clear_workspace_analytics_cache(instance.workspace_id))
-
-@receiver(post_save, sender=WorkspaceMember)
-def member_saved_handler(sender, instance, **kwargs):
-    clear_workspace_analytics_cache(instance.workspace_id)
-
-@receiver(post_delete, sender=WorkspaceMember)
-def member_deleted_handler(sender, instance, **kwargs):
-    clear_workspace_analytics_cache(instance.workspace_id)
-
-@receiver(post_save, sender=WorkspaceSettings)
-def settings_saved_handler(sender, instance, **kwargs):
-    clear_workspace_analytics_cache(instance.workspace_id)
-
-@receiver(post_save, sender=Report)
-def report_saved_handler(sender, instance, **kwargs):
-    clear_workspace_analytics_cache(instance.workspace_id)
-
-@receiver(post_delete, sender=Report)
-def report_deleted_handler(sender, instance, **kwargs):
-    clear_workspace_analytics_cache(instance.workspace_id)
+    """
+    Signal receiver to clear workspace analytics cache when a task is created, updated or deleted.
+    """
+    workspace_id = instance.workspace_id
+    # We clear the cache IMMEDIATELY after the transaction commits
+    transaction.on_commit(lambda: clear_workspace_analytics_cache(workspace_id))

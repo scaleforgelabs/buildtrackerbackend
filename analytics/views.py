@@ -17,23 +17,8 @@ from tasks.models import Task
 from utils import check_workspace_permission, cache_lock
 
 def get_dashboard_stats(workspace, date_from=None, date_to=None, milestone=None, sprint=None, bypass_cache=False):
-    version_key = f"workspace_analytics_version_{workspace.id}"
-    version = cache.get(version_key, 1)
-    
-    cache_key = f"dashboard_stats_{workspace.id}_{date_from}_{date_to}_{milestone}_{sprint}_v{version}"
-    if not bypass_cache:
-        cached_data = cache.get(cache_key)
-        if cached_data:
-            return cached_data
-            
-    lock_key = cache_key + "_lock"
-    with cache_lock(lock_key):
-        if not bypass_cache:
-            cached_data = cache.get(cache_key)
-            if cached_data:
-                return cached_data
-            
-        tasks = Task.objects.filter(workspace=workspace)
+    # DIRECT DB QUERIES for top-level stats to ensure 100% sync
+    tasks = Task.objects.filter(workspace=workspace)
     
     if date_from:
         tasks = tasks.filter(created_at__date__gte=date_from)
@@ -98,28 +83,13 @@ def get_dashboard_stats(workspace, date_from=None, date_to=None, milestone=None,
         'sprintProgress': sprint_progress
     }
     
-    if stats and not bypass_cache:
-        cache.set(cache_key, stats, 300)
+    # No cache.set - fresh every time
+    return stats
     return stats
 
 def get_dashboard_charts(workspace, period='monthly', milestone=None, date_from=None, date_to=None, bypass_cache=False):
-    version_key = f"workspace_analytics_version_{workspace.id}"
-    version = cache.get(version_key, 1)
-    
-    cache_key = f"dashboard_charts_{workspace.id}_{period}_{milestone}_{date_from}_{date_to}_v{version}"
-    if not bypass_cache:
-        cached_data = cache.get(cache_key)
-        if cached_data:
-            return cached_data
-            
-    lock_key = cache_key + "_lock"
-    with cache_lock(lock_key):
-        if not bypass_cache:
-            cached_data = cache.get(cache_key)
-            if cached_data:
-                return cached_data
-            
-        tasks = Task.objects.filter(workspace=workspace)
+    # Fresh charts: Removing manual cache for exact sync
+    tasks = Task.objects.filter(workspace=workspace)
     if date_from:
         tasks = tasks.filter(created_at__date__gte=date_from)
     if date_to:
@@ -128,10 +98,10 @@ def get_dashboard_charts(workspace, period='monthly', milestone=None, date_from=
         tasks = tasks.filter(milestone=milestone)
     
     status_data = list(tasks.values('status').annotate(count=Count('id')))
-    status_chart = [{'label': item['status'], 'value': item['count']} for item in status_data]
+    status_chart = [{'label': (item['status'] or 'pending').lower(), 'value': item['count']} for item in status_data]
     
     priority_data = list(tasks.values('priority').annotate(count=Count('id')))
-    priority_chart = [{'label': item['priority'], 'value': item['count']} for item in priority_data]
+    priority_chart = [{'label': (item['priority'] or 'medium').lower(), 'value': item['count']} for item in priority_data]
     
     end_date = date_to if date_to else timezone.now().date()
     start_date = date_from if date_from else (end_date - timedelta(days=30))
@@ -271,28 +241,12 @@ def get_dashboard_charts(workspace, period='monthly', milestone=None, date_from=
         'sprintChart': []
     }
     
-    if charts and not bypass_cache:
-        cache.set(cache_key, charts, 600)
+    # No cache.set to maintain real-time accuracy across dashboard and report
     return charts
 
 def get_performance_analytics(workspace, date_from=None, date_to=None, bypass_cache=False):
-    version_key = f"workspace_analytics_version_{workspace.id}"
-    version = cache.get(version_key, 1)
-    
-    cache_key = f"performance_analytics_{workspace.id}_{date_from}_{date_to}_v{version}"
-    if not bypass_cache:
-        cached_data = cache.get(cache_key)
-        if cached_data:
-            return cached_data
-            
-    lock_key = cache_key + "_lock"
-    with cache_lock(lock_key):
-        if not bypass_cache:
-            cached_data = cache.get(cache_key)
-            if cached_data:
-                return cached_data
-            
-        tasks = Task.objects.filter(workspace=workspace)
+    # Guaranteed fresh analytics for the report page
+    tasks = Task.objects.filter(workspace=workspace)
     if date_from:
         tasks = tasks.filter(created_at__date__gte=date_from)
     if date_to:
@@ -378,8 +332,8 @@ def get_performance_analytics(workspace, date_from=None, date_to=None, bypass_ca
         'sprintMetrics': sprint_metrics
     }
     
-    if analytics and not bypass_cache:
-        cache.set(cache_key, analytics, 600)
+    # No cache.set to maintain absolute sync
+    return analytics
     return analytics
 
 def get_trends_analytics(workspace, period='weekly', date_from=None, date_to=None, bypass_cache=False):
