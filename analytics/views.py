@@ -14,6 +14,7 @@ from cachalot.api import cachalot_disabled
 from django.db.models.functions import TruncDate
 from workspaces.models import Workspace, WorkspaceMember
 from tasks.models import Task
+from waitlist.models import WaitlistEntry
 from utils import check_workspace_permission, cache_lock
 
 def get_dashboard_stats(workspace, date_from=None, date_to=None, milestone=None, sprint=None, bypass_cache=False):
@@ -656,4 +657,26 @@ async def workspace_analytics_trends(request, workspaceId):
         response['Expires'] = '0'
         return response
     return await _sync_logic()
+
+
+@extend_schema(
+    tags=["Analytics"],
+    summary="Public Global Stats",
+    description="Get global statistics like total workspaces and waitlist entries for marketing homepage",
+    responses={200: {'description': 'Global statistics'}}
+)
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+async def public_stats(request):
+    @sync_to_async
+    def _get_counts():
+        workspace_count = Workspace.objects.count()
+        waitlist_count = WaitlistEntry.objects.count()
+        return {
+            'workspace_count': workspace_count,
+            'waitlist_count': waitlist_count
+        }
+    
+    counts = await _get_counts()
+    return Response(counts)
 
