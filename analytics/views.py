@@ -15,6 +15,7 @@ from django.db.models.functions import TruncDate
 from workspaces.models import Workspace, WorkspaceMember
 from tasks.models import Task
 from waitlist.models import WaitlistEntry
+from django.contrib.auth import get_user_model
 from utils import check_workspace_permission, cache_lock
 
 def get_dashboard_stats(workspace, date_from=None, date_to=None, milestone=None, sprint=None, bypass_cache=False):
@@ -670,12 +671,25 @@ async def workspace_analytics_trends(request, workspaceId):
 async def public_stats(request):
     @sync_to_async
     def _get_counts():
-        # Only count active workspaces for the dynamic marketing stats
+        # Get custom user model
+        User = get_user_model()
+        
+        # Count active workspaces
         workspace_count = Workspace.objects.filter(status='active').count()
+        
+        # Count actual users registered on the platform
+        user_count = User.objects.count()
+        
+        # Count waitlist entries
         waitlist_count = WaitlistEntry.objects.count()
+        
+        # Total signups = Registered Users + Waitlist Entries
+        # This provides a more accurate representation for "Global Signups"
+        total_signups = user_count + waitlist_count
+        
         return {
             'workspace_count': workspace_count,
-            'waitlist_count': waitlist_count
+            'waitlist_count': total_signups
         }
     
     counts = await _get_counts()
