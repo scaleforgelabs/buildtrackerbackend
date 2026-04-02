@@ -670,7 +670,8 @@ async def workspace_analytics_trends(request, workspaceId):
 async def public_stats(request):
     @sync_to_async
     def _get_counts():
-        workspace_count = Workspace.objects.count()
+        # Only count active workspaces for the dynamic marketing stats
+        workspace_count = Workspace.objects.filter(status='active').count()
         waitlist_count = WaitlistEntry.objects.count()
         return {
             'workspace_count': workspace_count,
