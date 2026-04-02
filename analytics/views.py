@@ -691,7 +691,12 @@ async def public_stats(request):
     
     try:
         stats_data = await _fetch_metrics()
-        return Response(stats_data)
+        response = Response(stats_data)
+        # Prevent caching for real-time accuracy
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response['Pragma'] = 'no-cache'
+        response['Expires'] = '0'
+        return response
     except Exception as e:
         # Fallback to sensible defaults or log error
         return Response({
