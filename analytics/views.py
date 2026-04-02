@@ -680,16 +680,10 @@ async def public_stats(request):
         # Count actual users registered on the platform
         user_count = User.objects.count()
         
-        # Count waitlist entries
-        waitlist_count = WaitlistEntry.objects.count()
-        
-        # Total signups = Registered Users + Waitlist Entries
-        # This provides a more accurate representation for "Global Signups"
-        total_signups = user_count + waitlist_count
-        
+        # Return only the user count as 'waitlist_count' to represent Global Signups
         return {
             'workspace_count': workspace_count,
-            'waitlist_count': total_signups
+            'waitlist_count': user_count
         }
     
     counts = await _get_counts()
