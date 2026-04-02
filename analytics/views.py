@@ -675,20 +675,18 @@ async def public_stats(request):
     """
     @sync_to_async
     def _fetch_metrics():
-        from django.contrib.auth import get_user_model
+        from auth_func.models import CustomUser
         from workspaces.models import Workspace
-        User = get_user_model()
         
-        # Explicit count of all registered users
-        # Filter for relevant users if necessary, but here we take all signups
-        signup_count = User.objects.count()
+        # Explicit count of all registered users on the planet
+        user_count = CustomUser.objects.count()
         
         # Explicit count of active workspaces
         active_workspaces = Workspace.objects.filter(status='active').count()
 
         return {
             'workspace_count': active_workspaces,
-            'waitlist_count': signup_count
+            'signup_count': user_count
         }
     
     try:
@@ -698,7 +696,7 @@ async def public_stats(request):
         # Fallback to sensible defaults or log error
         return Response({
             'workspace_count': 0,
-            'waitlist_count': 0,
+            'signup_count': 0,
             'error': str(e)
         }, status=500)
 
