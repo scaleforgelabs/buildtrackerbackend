@@ -669,23 +669,36 @@ async def workspace_analytics_trends(request, workspaceId):
 @api_view(['GET'])
 @permission_classes([permissions.AllowAny])
 async def public_stats(request):
+    """
+    Get global statistics for marketing homepage.
+    Signals 'Global Signups' as actual registered users.
+    """
     @sync_to_async
-    def _get_counts():
-        # Get custom user model
+    def _fetch_metrics():
+        from django.contrib.auth import get_user_model
+        from workspaces.models import Workspace
         User = get_user_model()
         
-        # Count active workspaces
-        workspace_count = Workspace.objects.filter(status='active').count()
+        # Explicit count of all registered users
+        # Filter for relevant users if necessary, but here we take all signups
+        signup_count = User.objects.count()
         
-        # Count actual users registered on the platform
-        user_count = User.objects.count()
-        
-        # Return only the user count as 'waitlist_count' to represent Global Signups
+        # Explicit count of active workspaces
+        active_workspaces = Workspace.objects.filter(status='active').count()
+
         return {
-            'workspace_count': workspace_count,
-            'waitlist_count': user_count
+            'workspace_count': active_workspaces,
+            'waitlist_count': signup_count
         }
     
-    counts = await _get_counts()
-    return Response(counts)
+    try:
+        stats_data = await _fetch_metrics()
+        return Response(stats_data)
+    except Exception as e:
+        # Fallback to sensible defaults or log error
+        return Response({
+            'workspace_count': 0,
+            'waitlist_count': 0,
+            'error': str(e)
+        }, status=500)
 
