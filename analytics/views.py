@@ -42,10 +42,8 @@ def get_dashboard_stats(workspace, date_from=None, date_to=None, milestone=None,
     velocity = round(completed_tasks / max(total_tasks, 1), 2) if total_tasks > 0 else 0
     
     total = max(total_tasks, 1)
-    # Standard Health Score Formula: (Completed + InProgress*0.6)/Total - (Overdue*0.4 + Blocked*0.4)/Total
-    positive_impact = (completed_tasks + (in_progress_tasks * 0.6)) / total
-    negative_impact = ((overdue_tasks * 0.4) + (blocked_tasks * 0.4)) / total
-    health_score = max(0, min(100, round((positive_impact - negative_impact) * 100, 1)))
+    completion_rate = (completed_tasks / total) * 100
+    health_score = round(completion_rate, 1)
     
     milestone_progress = []
     if milestone:
