@@ -256,6 +256,19 @@ def get_performance_analytics(workspace, date_from=None, date_to=None, bypass_ca
     completed_tasks = tasks.filter(status='completed').count()
     completion_rate = (completed_tasks / max(total_tasks, 1)) * 100
     
+    completion_trend = 0
+    if date_from and date_to:
+        period_days = (date_to - date_from).days
+        if period_days == 0:
+            period_days = 1
+        prior_date_to = date_from - timedelta(days=1)
+        prior_date_from = prior_date_to - timedelta(days=period_days - 1)
+        prior_tasks = Task.objects.filter(workspace=workspace, created_at__date__gte=prior_date_from, created_at__date__lte=prior_date_to)
+        prior_total = prior_tasks.count()
+        prior_completed = prior_tasks.filter(status='completed').count()
+        prior_completion_rate = (prior_completed / max(prior_total, 1)) * 100
+        completion_trend = completion_rate - prior_completion_rate
+    
     completed_with_dates = tasks.filter(
         status='completed',
         created_at__isnull=False,
@@ -325,6 +338,7 @@ def get_performance_analytics(workspace, date_from=None, date_to=None, bypass_ca
     
     analytics = {
         'completionRate': completion_rate,
+        'completionTrend': round(completion_trend, 1),
         'averageTaskTime': average_task_time,
         'teamEfficiency': team_efficiency,
         'bottlenecks': bottlenecks,
