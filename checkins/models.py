@@ -7,11 +7,10 @@ User = get_user_model()
 
 class DailyCheckIn(models.Model):
     SENTIMENT_CHOICES = [
-        ('GREAT', 'Great'),
+        ('CRUSHING', 'Crushing'),
         ('GOOD', 'Good'),
-        ('NEUTRAL', 'Neutral'),
-        ('BAD', 'Bad'),
-        ('TERRIBLE', 'Terrible'),
+        ('OKAY', 'Okay'),
+        ('LOW', 'Low'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

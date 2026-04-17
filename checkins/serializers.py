@@ -50,11 +50,10 @@ def html_to_lines(html: str) -> list:
 # ---------------------------------------------------------------------------
 
 SENTIMENT_MAP = {
-    'GREAT':   {'emoji': '🚀', 'label': 'CRUSHING'},
-    'GOOD':    {'emoji': '😊', 'label': 'GOOD'},
-    'NEUTRAL': {'emoji': '😐', 'label': 'NEUTRAL'},
-    'BAD':     {'emoji': '😔', 'label': 'BAD'},
-    'TERRIBLE':{'emoji': '😫', 'label': 'TERRIBLE'},
+    'CRUSHING': {'emoji': '🚀', 'label': 'CRUSHING'},
+    'GOOD':     {'emoji': '😇', 'label': 'GOOD'},
+    'OKAY':     {'emoji': '😐', 'label': 'OKAY'},
+    'LOW':      {'emoji': '😔', 'label': 'LOW'},
 }
 
 PRIORITY_MAP = {
