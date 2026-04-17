@@ -28,6 +28,7 @@ urlpatterns = [
     path('api/logs/', include('logs.urls')),
     path('api/modules/', include('modules.urls')),
     path('api/organizations/', include('organizations.urls')),
+    path('api/checkins/', include('checkins.urls')),
     path('api/', include('notifications.urls')),
     path('api/', include('widgets.urls')),
 ]

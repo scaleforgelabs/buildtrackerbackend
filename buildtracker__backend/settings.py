@@ -100,6 +100,7 @@ INSTALLED_APPS = [
     'modules',
     'notifications',
     'widgets',
+    'checkins',
     'storages',
 ]
 

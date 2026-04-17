@@ -221,9 +221,6 @@ async def workspace_shared_links(request, workspaceId):
             return response
 
         elif request.method == 'POST':
-            if not check_workspace_permission(request.user, workspace, ['Owner', 'Admin']):
-                return Response({'error': 'Only owners and admins can create shared quick links'}, status=status.HTTP_403_FORBIDDEN)
-
             serializer = SharedQuickLinkCreateSerializer(data=request.data, context={'workspace': workspace, 'request': request})
             if serializer.is_valid():
                 shared_link = serializer.save()
@@ -264,10 +261,14 @@ async def workspace_shared_link_detail(request, workspaceId, id):
         if not check_workspace_permission(request.user, workspace):
             return Response({'error': 'Permission denied: You must be a member of this workspace'}, status=status.HTTP_403_FORBIDDEN)
 
-        if not check_workspace_permission(request.user, workspace, ['Owner', 'Admin']):
-            return Response({'error': 'Only owners and admins can modify shared quick links'}, status=status.HTTP_403_FORBIDDEN)
 
         shared_link = get_object_or_404(SharedQuickLink, id=id, workspace=workspace)
+
+        # Members can only modify links they created; owners/admins can modify any
+        is_privileged = check_workspace_permission(request.user, workspace, ['Owner', 'Admin'])
+        is_creator = shared_link.created_by_id == request.user.id
+        if not is_privileged and not is_creator:
+            return Response({'error': 'You can only modify quick links you created'}, status=status.HTTP_403_FORBIDDEN)
 
         if request.method == 'PUT':
             update_data = {k: v for k, v in request.data.items() if v is not None and v != ''}
