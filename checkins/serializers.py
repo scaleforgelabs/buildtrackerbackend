@@ -221,14 +221,19 @@ class DailyCheckInFeedSerializer(serializers.ModelSerializer):
 
     def get_user(self, obj):
         u = obj.user
-        # Get member role from workspace membership
-        role = ''
-        try:
-            from workspaces.models import WorkspaceMember
-            member = WorkspaceMember.objects.get(workspace=obj.workspace, user=u)
-            role = member.job_role or member.role or ''
-        except Exception:
-            role = u.role or ''
+        
+        # Optimization: Use pre-fetched member roles from context if available
+        member_roles = self.context.get('member_roles', {})
+        role = member_roles.get(u.id)
+        
+        # Fallback to DB query if not in context (should rarely happen with new view logic)
+        if role is None:
+            try:
+                from workspaces.models import WorkspaceMember
+                member = WorkspaceMember.objects.get(workspace=obj.workspace, user=u)
+                role = member.job_role or member.role or ''
+            except Exception:
+                role = u.role or ''
 
         avatar_url = None
         if u.avatar:

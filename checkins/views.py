@@ -11,7 +11,7 @@ from drf_spectacular.utils import extend_schema
 
 from .models import DailyCheckIn
 from .serializers import DailyCheckInCreateSerializer, DailyCheckInFeedSerializer
-from workspaces.models import Workspace
+from workspaces.models import Workspace, WorkspaceMember
 from utils import check_workspace_permission
 
 
@@ -47,8 +47,16 @@ async def workspace_checkins(request, workspaceId):
                     .prefetch_related('yesterday_tasks', 'tomorrow_tasks', 'blockers__notify_member')
                     .order_by('-created_at')
                 )
+                # Optimization: Pre-fetch member roles to avoid N+1 queries in serializer
+                member_roles = {
+                    m.user_id: (m.job_role or m.role or '') 
+                    for m in WorkspaceMember.objects.filter(workspace=workspace)
+                }
+
                 serializer = DailyCheckInFeedSerializer(
-                    checkins, many=True, context={'request': request}
+                    checkins, 
+                    many=True, 
+                    context={'request': request, 'member_roles': member_roles}
                 )
             response = Response({'checkins': serializer.data})
             response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
@@ -61,8 +69,16 @@ async def workspace_checkins(request, workspaceId):
             )
             if serializer.is_valid():
                 checkin = serializer.save()
+                # Fetch individual member role for single item return
+                try:
+                    m = WorkspaceMember.objects.get(workspace=workspace, user=checkin.user)
+                    role = m.job_role or m.role or ''
+                except WorkspaceMember.DoesNotExist:
+                    role = ''
+                
                 feed_serializer = DailyCheckInFeedSerializer(
-                    checkin, context={'request': request}
+                    checkin, 
+                    context={'request': request, 'member_roles': {checkin.user_id: role}}
                 )
                 return Response(
                     {'checkin': feed_serializer.data},
@@ -100,8 +116,16 @@ async def my_checkins(request, workspaceId):
                 .prefetch_related('yesterday_tasks', 'tomorrow_tasks', 'blockers__notify_member')
                 .order_by('-created_at')
             )
+            # Optimization: Pre-fetch member roles
+            member_roles = {
+                m.user_id: (m.job_role or m.role or '') 
+                for m in WorkspaceMember.objects.filter(workspace=workspace)
+            }
+
             serializer = DailyCheckInFeedSerializer(
-                checkins, many=True, context={'request': request}
+                checkins, 
+                many=True, 
+                context={'request': request, 'member_roles': member_roles}
             )
 
         response = Response({'checkins': serializer.data})

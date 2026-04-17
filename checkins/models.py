@@ -48,6 +48,9 @@ class DailyCheckIn(models.Model):
         ordering = ['-created_at']
         # One check-in per user per workspace per day
         unique_together = ['workspace', 'user', 'date']
+        indexes = [
+            models.Index(fields=['workspace', 'date']),
+        ]
 
     def __str__(self):
         return f"{self.user.email} check-in for {self.workspace.name} on {self.date}"
