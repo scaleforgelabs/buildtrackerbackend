@@ -121,7 +121,7 @@ class TaskTagSerializer(serializers.ModelSerializer):
 
 class DailyCheckInCreateSerializer(serializers.Serializer):
     sentiment = serializers.ChoiceField(
-        choices=['GREAT', 'GOOD', 'NEUTRAL', 'BAD', 'TERRIBLE'],
+        choices=['CRUSHING', 'GOOD', 'OKAY', 'LOW'],
         default='GOOD'
     )
     yesterday_progress = serializers.CharField(allow_blank=True, default='')
