@@ -42,11 +42,11 @@ async def workspace_checkins(request, workspaceId):
                 today = timezone.now().date()
                 checkins = (
                     DailyCheckIn.objects
-                    .filter(workspace=workspace, date=today)
+                    .filter(workspace=workspace)
                     .select_related('user')
                     .prefetch_related('yesterday_tasks', 'tomorrow_tasks', 'blockers__notify_member')
                     .order_by('-created_at')
-                )
+                )[:50]
                 # Optimization: Pre-fetch member roles to avoid N+1 queries in serializer
                 member_roles = {
                     m.user_id: (m.job_role or m.role or '') 
@@ -155,10 +155,21 @@ async def checkin_status(request, workspaceId):
             )
 
         today = timezone.now().date()
+        seven_days_ago = today - timezone.timedelta(days=7)
+
+        recent_checkins_count = DailyCheckIn.objects.filter(
+            workspace=workspace, 
+            user=request.user, 
+            date__gt=seven_days_ago,
+            date__lte=today
+        ).values('date').distinct().count()
+
+        missed_days = max(0, 7 - recent_checkins_count)
+
         submitted = DailyCheckIn.objects.filter(
             workspace=workspace, user=request.user, date=today
         ).exists()
 
-        return Response({'submitted_today': submitted})
+        return Response({'submitted_today': submitted, 'missed_days': missed_days})
 
     return await _sync_logic()

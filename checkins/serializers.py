@@ -213,7 +213,7 @@ class DailyCheckInFeedSerializer(serializers.ModelSerializer):
     class Meta:
         model = DailyCheckIn
         fields = [
-            'id', 'user', 'time', 'status', 'sentiment',
+            'id', 'user', 'time', 'created_at', 'status', 'sentiment',
             'accomplishments', 'accomplishmentTasks',
             'plans', 'planTasks', 'blockers',
         ]

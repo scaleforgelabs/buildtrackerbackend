@@ -1,0 +1,648 @@
+erDiagram
+  CustomUser {
+    UUID id
+    Email email
+    Char first_name
+    Char last_name
+    Char role
+    Char phone
+    Text bio
+    Image avatar
+    Email billing_email
+    Char plan_type
+    Char status
+    Boolean is_verified
+    UUID last_active_workspace
+    DateTime created_at
+    DateTime updated_at
+  }
+  BackupJob {
+    UUID id
+    FK workspace
+    Char backup_type
+    Char status
+    Boolean include_files
+    Boolean encryption_enabled
+    URL file_url
+    PositiveInteger file_size
+    FK created_by
+    DateTime created_at
+    DateTime completed_at
+    Text error_message
+  }
+  Workspace ||--o{ BackupJob : "workspace"
+  User ||--o{ BackupJob : "created_by"
+  ExportJob {
+    UUID id
+    FK workspace
+    Char export_type
+    Char format
+    Char status
+    JSON date_range
+    URL file_url
+    PositiveInteger file_size
+    FK created_by
+    DateTime created_at
+    DateTime completed_at
+    Text error_message
+  }
+  Workspace ||--o{ ExportJob : "workspace"
+  User ||--o{ ExportJob : "created_by"
+  DailyCheckIn {
+    UUID id
+    FK workspace
+    FK user
+    Char sentiment
+    Text yesterday_progress
+    Text tomorrow_plan
+    Boolean has_blockers
+    M2M yesterday_tasks
+    M2M tomorrow_tasks
+    Date date
+    DateTime created_at
+    DateTime updated_at
+  }
+  Workspace ||--o{ DailyCheckIn : "workspace"
+  User ||--o{ DailyCheckIn : "user"
+  Task }o--o{ DailyCheckIn : "yesterday_tasks"
+  Task }o--o{ DailyCheckIn : "tomorrow_tasks"
+  CheckInBlocker {
+    UUID id
+    FK checkin
+    Text description
+    FK notify_member
+    Char priority
+    DateTime created_at
+  }
+  DailyCheckIn ||--o{ CheckInBlocker : "checkin"
+  User ||--o{ CheckInBlocker : "notify_member"
+  Folder {
+    UUID id
+    FK workspace
+    Char name
+    FK parent
+    FK created_by
+    DateTime created_at
+    DateTime updated_at
+  }
+  Workspace ||--o{ Folder : "workspace"
+  Folder ||--o{ Folder : "parent"
+  User ||--o{ Folder : "created_by"
+  File {
+    UUID id
+    FK workspace
+    FK folder
+    File file
+    Char file_name
+    Char file_type
+    PositiveInteger file_size
+    FK uploaded_by
+    DateTime uploaded_at
+  }
+  Workspace ||--o{ File : "workspace"
+  Folder ||--o{ File : "folder"
+  User ||--o{ File : "uploaded_by"
+  Integration {
+    UUID id
+    FK workspace
+    Char name
+    Char icon
+    URL url
+    Char category
+    Text description
+    FK created_by
+    DateTime created_at
+    DateTime updated_at
+    Boolean is_visible
+  }
+  Workspace ||--o{ Integration : "workspace"
+  User ||--o{ Integration : "created_by"
+  WorkspaceLog {
+    UUID id
+    FK workspace
+    FK user
+    Char log_type
+    Char severity
+    Char action
+    Char entity_type
+    UUID entity_id
+    Text description
+    JSON metadata
+    GenericIPAddress ip_address
+    Text user_agent
+    DateTime created_at
+  }
+  Workspace ||--o{ WorkspaceLog : "workspace"
+  User ||--o{ WorkspaceLog : "user"
+  AuditTrailLog {
+    UUID id
+    FK workspace
+    FK user
+    Char action
+    Char entity_type
+    UUID entity_id
+    JSON old_values
+    JSON new_values
+    GenericIPAddress ip_address
+    Text user_agent
+    Char session_id
+    DateTime created_at
+  }
+  Workspace ||--o{ AuditTrailLog : "workspace"
+  User ||--o{ AuditTrailLog : "user"
+  UserActivityLog {
+    UUID id
+    FK user
+    FK workspace
+    Char activity_type
+    Char module
+    Char endpoint
+    PositiveInteger duration_ms
+    GenericIPAddress ip_address
+    Text user_agent
+    Char session_id
+    JSON metadata
+    DateTime created_at
+  }
+  User ||--o{ UserActivityLog : "user"
+  Workspace ||--o{ UserActivityLog : "workspace"
+  SystemEventLog {
+    UUID id
+    FK workspace
+    Char event_type
+    Char severity
+    Text message
+    Char source
+    Char error_code
+    Text stack_trace
+    JSON metadata
+    Boolean resolved
+    DateTime resolved_at
+    DateTime created_at
+  }
+  Workspace ||--o{ SystemEventLog : "workspace"
+  ModuleAccess {
+    UUID id
+    FK user
+    FK workspace
+    Char module_name
+    PositiveInteger session_duration
+    JSON actions_performed
+    GenericIPAddress ip_address
+    Text user_agent
+    DateTime accessed_at
+  }
+  User ||--o{ ModuleAccess : "user"
+  Workspace ||--o{ ModuleAccess : "workspace"
+  ModulePreferences {
+    UUID id
+    FK user
+    JSON favorite_modules
+    JSON module_order
+    Boolean quick_access_enabled
+    DateTime created_at
+    DateTime updated_at
+  }
+  User ||--|| ModulePreferences : "user"
+  SystemMetric {
+    UUID id
+    Char metric_type
+    Char metric_name
+    Float value
+    Char unit
+    JSON metadata
+    DateTime timestamp
+  }
+  SystemAlert {
+    UUID id
+    Char alert_type
+    Char severity
+    Char status
+    Char title
+    Text description
+    JSON metadata
+    DateTime created_at
+    DateTime resolved_at
+  }
+  UsageMetric {
+    UUID id
+    FK organization
+    Char metric_name
+    Float value
+    Char unit
+    Decimal cost
+    Date date
+    JSON metadata
+  }
+  Organization ||--o{ UsageMetric : "organization"
+  Notification {
+    UUID id
+    FK user
+    FK triggered_by
+    FK workspace
+    Char action
+    Text description
+    Char note_type
+    Char severity
+    Boolean is_read
+    DateTime created_at
+    DateTime read_at
+  }
+  User ||--o{ Notification : "user"
+  User ||--o{ Notification : "triggered_by"
+  Workspace ||--o{ Notification : "workspace"
+  Organization {
+    UUID id
+    Char name
+    FK owner
+    M2M members
+    Char plan_type
+    Char status
+    Email billing_email
+    DateTime created_at
+    DateTime updated_at
+    Boolean is_active
+  }
+  User ||--o{ Organization : "owner"
+  User }o--o{ Organization : "members"
+  OrganizationMembership {
+    UUID id
+    FK organization
+    FK user
+    Char role
+    DateTime joined_at
+    Boolean is_active
+  }
+  Organization ||--o{ OrganizationMembership : "organization"
+  User ||--o{ OrganizationMembership : "user"
+  OrganizationUsage {
+    UUID id
+    FK organization
+    PositiveInteger user_count
+    PositiveInteger workspace_count
+    PositiveInteger storage_used_mb
+    PositiveInteger file_count
+    DateTime last_calculated
+  }
+  Organization ||--|| OrganizationUsage : "organization"
+  OrganizationInvitation {
+    UUID id
+    FK organization
+    Email email
+    FK invited_by
+    Char role
+    Char status
+    Char token
+    DateTime created_at
+    DateTime expires_at
+  }
+  Organization ||--o{ OrganizationInvitation : "organization"
+  User ||--o{ OrganizationInvitation : "invited_by"
+  QuickLinkCategory {
+    UUID id
+    Char name
+    FK user
+    DateTime created_at
+  }
+  User ||--o{ QuickLinkCategory : "user"
+  QuickLink {
+    UUID id
+    FK user
+    Char title
+    URL url
+    Char icon
+    Char category
+    FK workspace
+    Char entity_type
+    Char entity_id
+    Boolean is_pinned
+    PositiveInteger sort_order
+    DateTime created_at
+    DateTime updated_at
+  }
+  User ||--o{ QuickLink : "user"
+  Workspace ||--o{ QuickLink : "workspace"
+  SharedQuickLink {
+    UUID id
+    FK workspace
+    Char title
+    URL url
+    Text description
+    Char icon
+    Char category
+    Char visibility
+    FK created_by
+    DateTime created_at
+    DateTime updated_at
+  }
+  Workspace ||--o{ SharedQuickLink : "workspace"
+  User ||--o{ SharedQuickLink : "created_by"
+  RecentItem {
+    UUID id
+    FK user
+    Char item_type
+    Char item_id
+    FK workspace
+    Char action
+    PositiveInteger access_count
+    DateTime last_accessed
+    DateTime created_at
+  }
+  User ||--o{ RecentItem : "user"
+  Workspace ||--o{ RecentItem : "workspace"
+  Report {
+    UUID id
+    FK workspace
+    FK user
+    Char report_type
+    Char title
+    Text description
+    Char status
+    Char format
+    JSON parameters
+    JSON data
+    URL file_url
+    Char job_id
+    FK created_by
+    DateTime created_at
+    DateTime updated_at
+    DateTime completed_at
+    DateTime expires_at
+  }
+  Workspace ||--o{ Report : "workspace"
+  User ||--o{ Report : "user"
+  User ||--o{ Report : "created_by"
+  ReportTemplate {
+    UUID id
+    Char name
+    Char report_type
+    Char category
+    Text description
+    JSON template_config
+    Boolean is_active
+    DateTime created_at
+  }
+  ScheduledReport {
+    UUID id
+    FK workspace
+    Char report_type
+    Char frequency
+    JSON recipients
+    JSON parameters
+    DateTime next_run
+    DateTime last_run
+    Boolean is_active
+    FK created_by
+    DateTime created_at
+  }
+  Workspace ||--o{ ScheduledReport : "workspace"
+  User ||--o{ ScheduledReport : "created_by"
+  SharedReport {
+    UUID id
+    FK report
+    FK shared_by
+    JSON recipients
+    Char access_level
+    Text message
+    Char share_token
+    DateTime expires_at
+    DateTime created_at
+  }
+  Report ||--o{ SharedReport : "report"
+  User ||--o{ SharedReport : "shared_by"
+  Subscription {
+    UUID id
+    FK organization
+    Char plan_type
+    Char billing_cycle
+    Char status
+    DateTime start_date
+    DateTime end_date
+    DateTime grace_period_end
+    Char payment_provider
+    Char subscription_code
+    Char email_token
+    DateTime created_at
+    DateTime updated_at
+    Char authorization_code
+    Email billing_email
+    Char email_token
+    Boolean is_in_grace_period
+    Integer retry_count
+    DateTime next_retry_date
+    Boolean cancel_at_period_end
+    Char next_plan_type
+    DateTime last_charged_date
+    DateTime next_billing_date
+  }
+  Organization ||--|| Subscription : "organization"
+  PaymentHistory {
+    UUID id
+    FK organization
+    Decimal amount
+    Char currency
+    Char payment_provider
+    Char reference
+    Char status
+    Char plan_type
+    Char billing_cycle
+    DateTime transaction_date
+    JSON metadata
+  }
+  Organization ||--o{ PaymentHistory : "organization"
+  PaymentMethod {
+    UUID id
+    FK organization
+    Char provider
+    Char card_last4
+    Char card_type
+    Char card_expiry
+    Char card_first6
+    Boolean is_default
+    DateTime created_at
+    DateTime updated_at
+  }
+  Organization ||--o{ PaymentMethod : "organization"
+  Task {
+    UUID id
+    FK workspace
+    Char task_name
+    Text task_description
+    FK assigned_to
+    FK created_by
+    Char status
+    Char priority
+    DateTime start_date
+    DateTime end_date
+    Char duration
+    PositiveInteger milestone
+    PositiveInteger sprint
+    PositiveInteger percent_complete
+    Boolean has_blocker
+    Text blocker_reason
+    PositiveInteger ticket_number
+    DateTime created_at
+    DateTime updated_at
+  }
+  Workspace ||--o{ Task : "workspace"
+  User ||--o{ Task : "assigned_to"
+  User ||--o{ Task : "created_by"
+  TaskComment {
+    UUID id
+    FK task
+    FK user
+    Text comment_text
+    FK parent_comment
+    DateTime created_at
+    DateTime updated_at
+  }
+  Task ||--o{ TaskComment : "task"
+  User ||--o{ TaskComment : "user"
+  TaskComment ||--o{ TaskComment : "parent_comment"
+  TaskCommentAttachment {
+    UUID id
+    FK comment
+    File file
+    URL file_url
+    Char file_name
+    PositiveInteger file_size
+    FK uploaded_by
+    DateTime uploaded_at
+  }
+  TaskComment ||--o{ TaskCommentAttachment : "comment"
+  User ||--o{ TaskCommentAttachment : "uploaded_by"
+  TaskAttachment {
+    UUID id
+    FK task
+    File file
+    URL file_url
+    Char file_name
+    PositiveInteger file_size
+    FK uploaded_by
+    DateTime uploaded_at
+  }
+  Task ||--o{ TaskAttachment : "task"
+  User ||--o{ TaskAttachment : "uploaded_by"
+  PersonalTask {
+    UUID id
+    FK user
+    Char title
+    DateTime deadline
+    Boolean completed
+    DateTime created_at
+    DateTime updated_at
+  }
+  User ||--o{ PersonalTask : "user"
+  WaitlistEntry {
+    UUID id
+    Email email
+    DateTime created_at
+  }
+  DashboardWidget {
+    UUID id
+    FK user
+    Char widget_type
+    Char title
+    Integer position_x
+    Integer position_y
+    Integer width
+    Integer height
+    Boolean is_visible
+    JSON config
+    DateTime created_at
+    DateTime updated_at
+  }
+  CustomUser ||--o{ DashboardWidget : "user"
+  WidgetLayout {
+    UUID id
+    FK user
+    JSON layout_config
+    Integer columns
+    DateTime created_at
+    DateTime updated_at
+  }
+  CustomUser ||--|| WidgetLayout : "user"
+  WikiDocument {
+    UUID id
+    FK workspace
+    Char document_title
+    Text document_description
+    Char category
+    Char visibility
+    Image image
+    FK author
+    DateTime created_at
+    DateTime updated_at
+  }
+  Workspace ||--o{ WikiDocument : "workspace"
+  User ||--o{ WikiDocument : "author"
+  WikiDocumentAttachment {
+    UUID id
+    FK document
+    File file
+    URL file_url
+    Char file_name
+    PositiveInteger file_size
+    FK uploaded_by
+    DateTime uploaded_at
+  }
+  WikiDocument ||--o{ WikiDocumentAttachment : "document"
+  User ||--o{ WikiDocumentAttachment : "uploaded_by"
+  Workspace {
+    UUID id
+    Text name
+    Text description
+    Text type
+    Char status
+    FK owner
+    FK organization
+    DateTime created_at
+    DateTime updated_at
+    Integer no_of_tickets
+  }
+  User ||--o{ Workspace : "owner"
+  Organization ||--o{ Workspace : "organization"
+  WorkspaceMember {
+    UUID id
+    FK workspace
+    FK user
+    Text name
+    Text phone
+    Text job_role
+    Text role
+    Text user_status
+    DateTime joined_at
+    Text email
+  }
+  Workspace ||--o{ WorkspaceMember : "workspace"
+  User ||--o{ WorkspaceMember : "user"
+  WorkspaceInvitation {
+    UUID id
+    FK workspace
+    FK invited_by
+    Text email
+    Text phone
+    Text job_role
+    Text role
+    Text status
+    Text user_status
+    Text token
+    DateTime expires_at
+    DateTime created_at
+    DateTime updated_at
+  }
+  Workspace ||--o{ WorkspaceInvitation : "workspace"
+  User ||--o{ WorkspaceInvitation : "invited_by"
+  WorkspaceSettings {
+    UUID id
+    FK workspace
+    Char timezone
+    Char date_format
+    Boolean notifications_enabled
+    Boolean auto_assign_tasks
+    Char default_task_priority
+    JSON enabled_modules
+    DateTime created_at
+    DateTime updated_at
+  }
+  Workspace ||--|| WorkspaceSettings : "workspace"
