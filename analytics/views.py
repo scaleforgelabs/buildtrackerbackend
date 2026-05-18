@@ -19,7 +19,17 @@ from django.contrib.auth import get_user_model
 from utils import check_workspace_permission, cache_lock
 
 def get_dashboard_stats(workspace, date_from=None, date_to=None, milestone=None, sprint=None, bypass_cache=False):
-    # DIRECT DB QUERIES for top-level stats to ensure 100% sync
+    # Version-based cache invalidation: when any task in this workspace is created/updated/deleted,
+    # the signal in tasks/signals.py bumps the version, making old cache keys invisible instantly.
+    # This gives you BOTH caching performance AND real-time accuracy after writes.
+    version_key = f"workspace_analytics_version_{workspace.id}"
+    version = cache.get(version_key, 1)
+    cache_key = f"dashboard_stats_{workspace.id}_{date_from}_{date_to}_{milestone}_{sprint}_v{version}"
+    if not bypass_cache:
+        cached = cache.get(cache_key)
+        if cached:
+            return cached
+
     tasks = Task.objects.filter(workspace=workspace)
     
     if date_from:
@@ -83,12 +93,20 @@ def get_dashboard_stats(workspace, date_from=None, date_to=None, milestone=None,
         'sprintProgress': sprint_progress
     }
     
-    # No cache.set - fresh every time
-    return stats
+    cache.set(cache_key, stats, 10)  # 10-second TTL: near-real-time without DB hammering
     return stats
 
 def get_dashboard_charts(workspace, period='monthly', milestone=None, date_from=None, date_to=None, bypass_cache=False):
-    # Fresh charts: Removing manual cache for exact sync
+    # Version-based cache invalidation
+    version_key = f"workspace_analytics_version_{workspace.id}"
+    version = cache.get(version_key, 1)
+    cache_key = f"dashboard_charts_{workspace.id}_{period}_{date_from}_{date_to}_{milestone}_v{version}"
+    
+    if not bypass_cache:
+        cached = cache.get(cache_key)
+        if cached:
+            return cached
+
     tasks = Task.objects.filter(workspace=workspace)
     if date_from:
         tasks = tasks.filter(created_at__date__gte=date_from)
@@ -146,18 +164,20 @@ def get_dashboard_charts(workspace, period='monthly', milestone=None, date_from=
     for stat in tasks_assigned_counts:
         user_stats[stat['assigned_to']] = stat
 
-    completed_task_times = tasks.filter(
+    from django.db.models import F, Avg
+    avg_times = tasks.filter(
         status='completed', created_at__isnull=False, updated_at__isnull=False, assigned_to__isnull=False
-    ).values('assigned_to', 'created_at', 'updated_at')
+    ).values('assigned_to').annotate(
+        avg_days=Avg(F('updated_at') - F('created_at'))
+    )
     
     user_times = {}
-    for t in completed_task_times:
-        uid = t['assigned_to']
-        duration = (t['updated_at'] - t['created_at']).total_seconds() / 86400
-        if uid not in user_times:
-            user_times[uid] = {'total': 0, 'count': 0}
-        user_times[uid]['total'] += duration
-        user_times[uid]['count'] += 1
+    for item in avg_times:
+        if item['avg_days']:
+            # PostgreSQL returns a timedelta object for F-F operations
+            user_times[item['assigned_to']] = item['avg_days'].total_seconds() / 86400
+        else:
+            user_times[item['assigned_to']] = 0
         
     for member in members:
         uid = member.user.id
@@ -168,8 +188,7 @@ def get_dashboard_charts(workspace, period='monthly', milestone=None, date_from=
         in_progress = stats.get('in_progress', 0)
         overdue = stats.get('overdue', 0)
         
-        time_data = user_times.get(uid, {})
-        avg_time = round(time_data['total'] / time_data['count'], 1) if time_data.get('count', 0) > 0 else 0
+        avg_time = round(user_times.get(uid, 0), 1)
         
         efficiency = (completed / max(tasks_assigned, 1)) * 100
         
@@ -241,11 +260,19 @@ def get_dashboard_charts(workspace, period='monthly', milestone=None, date_from=
         'sprintChart': []
     }
     
-    # No cache.set to maintain real-time accuracy across dashboard and report
+    # 5-minute TTL, but auto-invalidated by version bump on task changes
+    cache.set(cache_key, charts, 300)
     return charts
 
 def get_performance_analytics(workspace, date_from=None, date_to=None, bypass_cache=False):
-    # Guaranteed fresh analytics for the report page
+    version_key = f"workspace_analytics_version_{workspace.id}"
+    version = cache.get(version_key, 1)
+    cache_key = f"perf_analytics_{workspace.id}_{date_from}_{date_to}_v{version}"
+    if not bypass_cache:
+        cached = cache.get(cache_key)
+        if cached:
+            return cached
+
     tasks = Task.objects.filter(workspace=workspace)
     if date_from:
         tasks = tasks.filter(created_at__date__gte=date_from)
@@ -275,12 +302,13 @@ def get_performance_analytics(workspace, date_from=None, date_to=None, bypass_ca
         updated_at__isnull=False
     )
     
-    if completed_with_dates.exists():
-        total_time = sum(
-            (task.updated_at - task.created_at).total_seconds() / 86400
-            for task in completed_with_dates
-        )
-        average_task_time = round(total_time / completed_with_dates.count(), 1)
+    from django.db.models import Avg, F
+    avg_duration = completed_with_dates.aggregate(
+        avg_time=Avg(F('updated_at') - F('created_at'))
+    )['avg_time']
+    
+    if avg_duration:
+        average_task_time = round(avg_duration.total_seconds() / 86400, 1)
     else:
         average_task_time = 0
     
@@ -346,8 +374,7 @@ def get_performance_analytics(workspace, date_from=None, date_to=None, bypass_ca
         'sprintMetrics': sprint_metrics
     }
     
-    # No cache.set to maintain absolute sync
-    return analytics
+    cache.set(cache_key, analytics, 10)  # 10-second TTL, auto-invalidated by version bump on task changes
     return analytics
 
 def get_trends_analytics(workspace, period='weekly', date_from=None, date_to=None, bypass_cache=False):

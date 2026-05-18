@@ -144,6 +144,22 @@ class TaskSerializer(serializers.ModelSerializer):
             'updated_at', 'comments', 'attachments'
         ]
         read_only_fields = ['ticket_number', 'created_by', 'created_at', 'updated_at', 'duration']
+
+class TaskListSerializer(serializers.ModelSerializer):
+    """Simplified serializer for list views to reduce payload size and DB queries."""
+    assigned_user = UserSerializer(source='assigned_to', read_only=True)
+    created_by_user = UserSerializer(source='created_by', read_only=True)
+    
+    class Meta:
+        model = Task
+        fields = [
+            'id', 'task_name', 'assigned_to', 'assigned_user',
+            'created_by', 'created_by_user', 'status', 'priority', 
+            'start_date', 'end_date', 'milestone', 'sprint', 
+            'percent_complete', 'has_blocker', 'ticket_number', 
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['ticket_number', 'created_by', 'created_at', 'updated_at']
     
     def update(self, instance, validated_data):
         # Calculate duration if both dates are provided
@@ -235,43 +251,42 @@ class TaskCreateSerializer(serializers.ModelSerializer):
                     uploaded_by=user
                 )
         
-        # Create notification for assigned user
-        from notifications.models import Notification
+        # Create notification for assigned user via async Celery task
         assigner_name = f"{user.first_name} {user.last_name}".strip() or user.email
         
         if task.assigned_to:
-            log_msg = f"Triggering assignment email for task {task.id} to {task.assigned_to.email}\n"
-            print(log_msg, flush=True)
-            with open('task_email_debug.log', 'a') as f:
-                f.write(log_msg)
-            Notification.objects.create(
-                user=task.assigned_to,
-                triggered_by=user,
-                workspace=workspace,
+            from notifications.tasks import notify_recipients
+            
+            # Notify the assignee
+            notify_recipients(
+                recipient_ids=[str(task.assigned_to.id)],
+                workspace_id=workspace.id,
                 action=f"{assigner_name} assigned you to: {task.task_name}",
                 description=f"You have been assigned to \"{task.task_name}\" by {assigner_name}",
                 note_type='task_assigned',
-                severity='info'
+                severity='info',
+                triggered_by_id=user.id
             )
             
-            # Notify admins/owners
+            # Notify admins/owners (excluding creator and assignee — they already know)
             from workspaces.models import WorkspaceMember
-            workspace_admins = WorkspaceMember.objects.filter(
-                workspace=workspace,
-                role__in=['Owner', 'Admin']
-            ).exclude(user=user)
+            admin_ids = list(
+                WorkspaceMember.objects.filter(
+                    workspace=workspace,
+                    role__in=['Owner', 'Admin']
+                ).exclude(user=user).exclude(user=task.assigned_to).values_list('user_id', flat=True)
+            )
             
-            for member in workspace_admins:
-                if member.user != task.assigned_to:
-                    Notification.objects.create(
-                        user=member.user,
-                        triggered_by=user,
-                        workspace=workspace,
-                        action=f'New Task Created: {task.task_name}',
-                        description=f'{assigner_name} created a new task',
-                        note_type='task_created',
-                        severity='info'
-                    )
+            if admin_ids:
+                notify_recipients(
+                    recipient_ids=admin_ids,
+                    workspace_id=workspace.id,
+                    action=f'New Task Created: {task.task_name}',
+                    description=f'{assigner_name} created a new task',
+                    note_type='task_created',
+                    severity='info',
+                    triggered_by_id=user.id
+                )
 
             # Send email notification after transaction commits
             from django.db import transaction

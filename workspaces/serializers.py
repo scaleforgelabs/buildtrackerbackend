@@ -25,8 +25,8 @@ class WorkspaceSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Workspace
-        fields = ['id', 'name', 'description', 'type', 'owner', 'created_at', 'updated_at', 'no_of_tickets', 'member_count', 'user_role']
-        read_only_fields = ['id', 'owner', 'created_at', 'updated_at', 'no_of_tickets']
+        fields = ['id', 'slug', 'name', 'description', 'type', 'owner', 'created_at', 'updated_at', 'no_of_tickets', 'member_count', 'user_role']
+        read_only_fields = ['id', 'slug', 'owner', 'created_at', 'updated_at', 'no_of_tickets']
     
     def get_member_count(self, obj):
         if hasattr(obj, 'member_count'):

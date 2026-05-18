@@ -28,9 +28,22 @@ class Workspace(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
     no_of_tickets = models.IntegerField(default=0)
+    slug = models.SlugField(max_length=255, unique=True, null=True, blank=True)
     
     class Meta:
         ordering = ['-created_at']
+    
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            from django.utils.text import slugify
+            base_slug = slugify(self.name) or "workspace"
+            slug = base_slug
+            counter = 1
+            while Workspace.objects.filter(slug=slug).exclude(id=self.id).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            self.slug = slug
+        super().save(*args, **kwargs)
     
     def __str__(self):
         return self.name

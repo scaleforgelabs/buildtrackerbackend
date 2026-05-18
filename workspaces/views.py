@@ -19,6 +19,20 @@ from .serializers import (
 )
 from utils import sanitize_input, check_workspace_permission, create_workspace_log, create_audit_log, create_user_activity_log, create_notification
 
+def get_workspace_by_id_or_slug(workspace_id, prefetch_members=False):
+    import uuid
+    queryset = Workspace.objects
+    if prefetch_members:
+        queryset = queryset.prefetch_related('members')
+        
+    try:
+        # Check if workspace_id is a valid UUID
+        uuid.UUID(str(workspace_id))
+        return get_object_or_404(queryset, id=workspace_id)
+    except (ValueError, AttributeError):
+        # Otherwise look up by slug
+        return get_object_or_404(queryset, slug=workspace_id)
+
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
     page_size_query_param = 'PageSize'
@@ -240,7 +254,7 @@ async def workspaces_list_create(request):
 async def workspace_detail(request, id):
     @sync_to_async
     def _sync_logic():
-        workspace = get_object_or_404(Workspace.objects.prefetch_related('members'), id=id)
+        workspace = get_workspace_by_id_or_slug(id, prefetch_members=True)
 
         if not check_workspace_permission(request.user, workspace):
             return Response({'error': 'Permission denied: You must be a member of this workspace'}, status=status.HTTP_403_FORBIDDEN)
@@ -370,7 +384,7 @@ async def workspace_detail(request, id):
 async def workspace_members(request, id):
     @sync_to_async
     def _sync_logic():
-        workspace = get_object_or_404(Workspace, id=id)
+        workspace = get_workspace_by_id_or_slug(id)
 
         if not check_workspace_permission(request.user, workspace):
             return Response({'error': 'Permission denied: You must be a member of this workspace'}, status=status.HTTP_403_FORBIDDEN)
@@ -497,7 +511,7 @@ async def workspace_members(request, id):
 async def workspace_member_detail(request, id, userId):
     @sync_to_async
     def _sync_logic():
-        workspace = get_object_or_404(Workspace, id=id)
+        workspace = get_workspace_by_id_or_slug(id)
         member = get_object_or_404(WorkspaceMember, workspace=workspace, user_id=userId)
 
         if not check_workspace_permission(request.user, workspace, ['Owner', 'Admin']):
@@ -705,7 +719,7 @@ async def workspace_member_detail(request, id, userId):
 async def workspace_invitations(request, id):
     @sync_to_async
     def _sync_logic():
-        workspace = get_object_or_404(Workspace, id=id)
+        workspace = get_workspace_by_id_or_slug(id)
 
         if not check_workspace_permission(request.user, workspace):
             return Response({'error': 'Permission denied: You must be a member of this workspace'}, status=status.HTTP_403_FORBIDDEN)
@@ -855,7 +869,7 @@ async def workspace_invitations(request, id):
 async def workspace_invitation_detail(request, id, invitationId):
     @sync_to_async
     def _sync_logic():
-        workspace = get_object_or_404(Workspace, id=id)
+        workspace = get_workspace_by_id_or_slug(id)
         invitation = get_object_or_404(WorkspaceInvitation, id=invitationId, workspace=workspace)
 
         if request.method == 'PUT':
@@ -1122,7 +1136,7 @@ async def get_invitation_details(request, token):
 async def workspace_settings(request, workspaceId):
     @sync_to_async
     def _sync_logic():
-        workspace = get_object_or_404(Workspace, id=workspaceId)
+        workspace = get_workspace_by_id_or_slug(workspaceId)
 
         if not check_workspace_permission(request.user, workspace):
             return Response({'error': 'Permission denied: You must be a member of this workspace'}, status=status.HTTP_403_FORBIDDEN)

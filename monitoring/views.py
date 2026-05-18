@@ -18,11 +18,20 @@ from .serializers import (
     SystemMetricSerializer, SystemAlertSerializer
 )
 from workspaces.models import Workspace
+from logs.models import UserActivityLog
 from utils import check_workspace_permission
 
 def check_admin_permission(user, workspace):
     """Check if user is workspace admin or owner"""
     return check_workspace_permission(user, workspace, ['Owner', 'Admin'])
+
+def resolve_workspace(workspace_id_or_slug):
+    import uuid
+    try:
+        val = uuid.UUID(str(workspace_id_or_slug))
+        return get_object_or_404(Workspace, id=val)
+    except ValueError:
+        return get_object_or_404(Workspace, slug=workspace_id_or_slug)
 
 def check_organization_access(user, user_id):
     """Check if user has access to another user's data (only themselves)"""
@@ -35,7 +44,9 @@ def get_system_performance_metrics():
     if cached_data:
         return cached_data
     
-    cpu_usage = psutil.cpu_percent(interval=1)
+    # Use interval=None for non-blocking call (returns CPU % since last call).
+    # interval=1 was blocking the thread pool for 1 full second on every cache miss.
+    cpu_usage = psutil.cpu_percent(interval=None)
     memory = psutil.virtual_memory()
     disk = psutil.disk_usage('/')
     
@@ -43,10 +54,14 @@ def get_system_performance_metrics():
         cursor.execute("SELECT count(*) FROM pg_stat_activity WHERE state = 'active';")
         db_connections = cursor.fetchone()[0]
     
-    SystemMetric.objects.create(metric_type='performance', metric_name='cpu_usage', value=cpu_usage, unit='percent')
-    SystemMetric.objects.create(metric_type='performance', metric_name='memory_usage', value=memory.percent, unit='percent')
-    SystemMetric.objects.create(metric_type='performance', metric_name='disk_usage', value=disk.percent, unit='percent')
-    SystemMetric.objects.create(metric_type='performance', metric_name='database_connections', value=db_connections, unit='count')
+    from .tasks import create_system_metrics_task
+    metrics_list = [
+        {'metric_type': 'performance', 'metric_name': 'cpu_usage', 'value': cpu_usage, 'unit': 'percent'},
+        {'metric_type': 'performance', 'metric_name': 'memory_usage', 'value': memory.percent, 'unit': 'percent'},
+        {'metric_type': 'performance', 'metric_name': 'disk_usage', 'value': disk.percent, 'unit': 'percent'},
+        {'metric_type': 'performance', 'metric_name': 'database_connections', 'value': db_connections, 'unit': 'count'},
+    ]
+    create_system_metrics_task.delay(metrics_list)
     
     recent_metrics = SystemMetric.objects.filter(
         metric_name='cache_hit_rate',
@@ -205,7 +220,7 @@ def get_optimization_suggestions(user):
 async def system_health(request, workspaceId):
     @sync_to_async
     def _sync_logic():
-        workspace = get_object_or_404(Workspace, id=workspaceId)
+        workspace = resolve_workspace(workspaceId)
         if not check_admin_permission(request.user, workspace):
             return Response({'error': 'Workspace Owner/Admin access required'}, status=status.HTTP_403_FORBIDDEN)
 
@@ -247,7 +262,7 @@ async def system_health(request, workspaceId):
 async def system_metrics(request, workspaceId):
     @sync_to_async
     def _sync_logic():
-        workspace = get_object_or_404(Workspace, id=workspaceId)
+        workspace = resolve_workspace(workspaceId)
         if not check_admin_permission(request.user, workspace):
             return Response({'error': 'Workspace Owner/Admin access required'}, status=status.HTTP_403_FORBIDDEN)
 
@@ -363,4 +378,173 @@ async def organization_usage_detailed(request, id):
             'optimization_suggestions': optimization_suggestions
         })
     return await _sync_logic()
+
+
+@extend_schema(
+    tags=["Monitoring"],
+    summary="Endpoint Analytics",
+    description="Get aggregated metrics of endpoint calls for the workspace sorted by call count (Workspace Owner/Admin only)",
+    responses={200: {'description': 'Aggregated endpoint analytics'}}
+)
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+async def workspace_endpoint_analytics(request, workspaceId):
+    @sync_to_async
+    def _sync_logic():
+        workspace = resolve_workspace(workspaceId)
+        if not check_admin_permission(request.user, workspace):
+            return Response({'error': 'Workspace Owner/Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+            
+        logs = UserActivityLog.objects.filter(workspace=workspace, activity_type='api_request')
+        
+        analytics = {}
+        import re
+        
+        for log in logs.iterator():
+            endpoint = log.endpoint
+            # Normalize UUIDs to standard placeholder
+            endpoint = re.sub(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', '{id}', endpoint)
+            # Normalize numerical IDs
+            endpoint = re.sub(r'/\d+/', '/{id}/', endpoint)
+            # Normalize workspace slug in the endpoint path
+            if workspace.slug:
+                endpoint = endpoint.replace(workspace.slug, '{slug}')
+                
+            method = log.metadata.get('method', 'GET')
+            status_code = log.metadata.get('status_code', 200)
+            duration = log.duration_ms or 0
+            
+            key = f"{method} {endpoint}"
+            if key not in analytics:
+                analytics[key] = {
+                    'method': method,
+                    'endpoint': endpoint,
+                    'count': 0,
+                    'total_duration': 0,
+                    'max_duration': 0,
+                    'success_count': 0,
+                    'last_accessed': log.created_at
+                }
+                
+            entry = analytics[key]
+            entry['count'] += 1
+            entry['total_duration'] += duration
+            if duration > entry['max_duration']:
+                entry['max_duration'] = duration
+            if isinstance(status_code, int) and 200 <= status_code < 400:
+                entry['success_count'] += 1
+            if log.created_at > entry['last_accessed']:
+                entry['last_accessed'] = log.created_at
+                
+        results = []
+        for key, entry in analytics.items():
+            avg_duration = entry['total_duration'] / entry['count'] if entry['count'] > 0 else 0
+            success_rate = (entry['success_count'] / entry['count'] * 100) if entry['count'] > 0 else 0
+            results.append({
+                'method': entry['method'],
+                'endpoint': entry['endpoint'],
+                'count': entry['count'],
+                'avg_duration_ms': round(avg_duration, 2),
+                'max_duration_ms': entry['max_duration'],
+                'success_rate': round(success_rate, 2),
+                'last_accessed': entry['last_accessed']
+            })
+            
+        results.sort(key=lambda x: x['count'], reverse=True)
+        
+        return Response({
+            'workspace_id': str(workspace.id),
+            'workspace_name': workspace.name,
+            'workspace_slug': workspace.slug,
+            'endpoints': results
+        })
+        
+    return await _sync_logic()
+
+
+def backend_endpoint_analytics(request):
+    import re
+    import json
+    from django.conf import settings
+    from django.http import HttpResponseForbidden
+    from django.shortcuts import render
+    from logs.models import UserActivityLog
+    
+    # Restrict to superusers or debug mode
+    if not settings.DEBUG and not (request.user.is_authenticated and request.user.is_superuser):
+        return HttpResponseForbidden("Only superusers are allowed to access endpoint analytics.")
+        
+    logs = UserActivityLog.objects.filter(activity_type='api_request')
+    
+    analytics = {}
+    detailed_logs = []
+    
+    for log in logs.iterator():
+        endpoint = log.endpoint
+        # Normalize UUIDs
+        endpoint = re.sub(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', '{id}', endpoint)
+        # Normalize numerical IDs
+        endpoint = re.sub(r'/\d+/', '/{id}/', endpoint)
+        
+        method = log.metadata.get('method', 'GET') if log.metadata else 'GET'
+        status_code = log.metadata.get('status_code', 200) if log.metadata else 200
+        duration = log.duration_ms or 0
+        
+        key = f"{method} {endpoint}"
+        if key not in analytics:
+            analytics[key] = {
+                'method': method,
+                'endpoint': endpoint,
+                'count': 0,
+                'total_duration': 0,
+                'max_duration': 0,
+                'min_duration': float('inf'),
+                'success_count': 0,
+            }
+            
+        entry = analytics[key]
+        entry['count'] += 1
+        entry['total_duration'] += duration
+        if duration > entry['max_duration']:
+            entry['max_duration'] = duration
+        if duration < entry['min_duration']:
+            entry['min_duration'] = duration
+        if isinstance(status_code, int) and 200 <= status_code < 400:
+            entry['success_count'] += 1
+            
+        detailed_logs.append({
+            'id': str(log.id),
+            'timestamp': log.created_at.isoformat(),
+            'user': log.user.email if log.user else 'System/Anonymous',
+            'method': method,
+            'endpoint': endpoint,
+            'raw_endpoint': log.endpoint,
+            'duration_ms': duration,
+            'status_code': status_code,
+            'ip_address': log.ip_address or 'N/A',
+            'user_agent': log.metadata.get('user_agent', 'N/A') if log.metadata else 'N/A'
+        })
+        
+    results = []
+    for key, entry in analytics.items():
+        avg_duration = entry['total_duration'] / entry['count'] if entry['count'] > 0 else 0
+        success_rate = (entry['success_count'] / entry['count'] * 100) if entry['count'] > 0 else 0
+        results.append({
+            'method': entry['method'],
+            'endpoint': entry['endpoint'],
+            'count': entry['count'],
+            'avg_duration_ms': round(avg_duration, 2),
+            'max_duration_ms': entry['max_duration'],
+            'min_duration_ms': entry['min_duration'] if entry['min_duration'] != float('inf') else 0,
+            'success_rate': round(success_rate, 2),
+        })
+        
+    results.sort(key=lambda x: x['count'], reverse=True)
+    detailed_logs.sort(key=lambda x: x['timestamp'], reverse=True)
+    
+    context = {
+        'endpoints': results,
+        'detailed_logs_json': json.dumps(detailed_logs[:500]),
+    }
+    return render(request, 'endpoint_analytics.html', context)
 

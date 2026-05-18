@@ -152,9 +152,11 @@ DATABASES = {
         'PASSWORD': config('DB_PASSWORD'),
         'HOST': config('DB_HOST'),
         'PORT': config('DB_PORT'),
-        'CONN_MAX_AGE': int(config('CONN_MAX_AGE', default=600)),  # 10 minutes connection pooling
+        'CONN_MAX_AGE': int(config('CONN_MAX_AGE', default='600')),  # Persistent connections (use 0 if behind PgBouncer in transaction mode)
+        'CONN_HEALTH_CHECKS': True,  # Verify connections before use (Django 4.1+)
         'OPTIONS': {
             'client_encoding': 'UTF8',
+            'options': '-c statement_timeout=30000',  # 30 second query timeout to prevent runaway queries
         },
     }
 }
@@ -240,6 +242,12 @@ CACHES = {
         'LOCATION': config('REDIS_URL', default='redis://127.0.0.1:6379/1'),
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'CONNECTION_POOL_KWARGS': {
+                'max_connections': 50,       # Limit pool size to prevent Redis connection exhaustion
+                'retry_on_timeout': True,    # Auto-retry on timeout instead of crashing
+            },
+            'SOCKET_CONNECT_TIMEOUT': 5,     # Fail fast if Redis is unreachable (seconds)
+            'SOCKET_TIMEOUT': 5,             # Don't hang on slow Redis responses (seconds)
         }
     }
 }
@@ -251,7 +259,14 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
-CELERY_TASK_ALWAYS_EAGER = True  # Tasks execute immediately for development
+# IMPORTANT: Set CELERY_TASK_ALWAYS_EAGER=True in .env ONLY for local development without a Celery worker.
+# In production this MUST be False so tasks run asynchronously in the Celery worker process.
+CELERY_TASK_ALWAYS_EAGER = config('CELERY_TASK_ALWAYS_EAGER', default='False').lower() == 'true'
+CELERY_TASK_ACKS_LATE = True  # Acknowledge tasks after execution (prevents task loss on worker crash)
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1  # Prevent workers from hoarding tasks
+CELERY_TASK_REJECT_ON_WORKER_LOST = True  # Requeue tasks if worker is killed
+CELERY_TASK_TIME_LIMIT = 300  # Hard kill tasks after 5 minutes
+CELERY_TASK_SOFT_TIME_LIMIT = 240  # Raise SoftTimeLimitExceeded after 4 minutes
 
 # Celery Beat Schedule for Periodic Tasks
 from celery.schedules import crontab  # noqa: E402

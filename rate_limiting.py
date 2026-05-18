@@ -58,19 +58,19 @@ def rate_limit(requests_per_minute=60):
                 cache_key = f"rate_limit:{module_path}:{user_id}"
                 
                 try:
-                    request_count = cache.get(cache_key, 0)
-                    
-                    if request_count >= requests_per_minute:
-                        return get_error_response(
-                            'RATE_LIMIT_EXCEEDED',
-                            f'Rate limit of {requests_per_minute} requests per minute exceeded'
-                        )
-                    
-                    new_count = cache.incr(cache_key)
-                    if new_count == 1:
-                        cache.expire(cache_key, 60)
-                except (ValueError, Exception):
+                    # Atomic incr-first pattern: avoids TOCTOU race condition
+                    # where concurrent requests could both pass the check before either increments.
+                    count = cache.incr(cache_key)
+                except ValueError:
+                    # Key doesn't exist yet — initialize it
                     cache.set(cache_key, 1, 60)
+                    count = 1
+                
+                if count > requests_per_minute:
+                    return get_error_response(
+                        'RATE_LIMIT_EXCEEDED',
+                        f'Rate limit of {requests_per_minute} requests per minute exceeded'
+                    )
                 
                 return await view_func(request, *args, **kwargs)
             return async_wrapper
@@ -87,19 +87,18 @@ def rate_limit(requests_per_minute=60):
                 cache_key = f"rate_limit:{module_path}:{user_id}"
                 
                 try:
-                    request_count = cache.get(cache_key, 0)
-                    
-                    if request_count >= requests_per_minute:
-                        return get_error_response(
-                            'RATE_LIMIT_EXCEEDED',
-                            f'Rate limit of {requests_per_minute} requests per minute exceeded'
-                        )
-                    
-                    new_count = cache.incr(cache_key)
-                    if new_count == 1:
-                        cache.expire(cache_key, 60)
-                except (ValueError, Exception):
+                    # Atomic incr-first pattern: avoids TOCTOU race condition
+                    count = cache.incr(cache_key)
+                except ValueError:
+                    # Key doesn't exist yet — initialize it
                     cache.set(cache_key, 1, 60)
+                    count = 1
+                
+                if count > requests_per_minute:
+                    return get_error_response(
+                        'RATE_LIMIT_EXCEEDED',
+                        f'Rate limit of {requests_per_minute} requests per minute exceeded'
+                    )
                 
                 return view_func(request, *args, **kwargs)
             return sync_wrapper

@@ -184,12 +184,28 @@ def invalidate_user_cache(user):
     cache.delete(cache_key)
 
 def check_workspace_permission(user, workspace, required_roles=['Owner', 'Admin', 'Member']):
-    from workspaces.models import WorkspaceMember
-    try:
-        member = WorkspaceMember.objects.get(workspace=workspace, user=user)
-        return member.role in required_roles
-    except WorkspaceMember.DoesNotExist:
+    """
+    Check if a user has specific roles in a workspace.
+    Uses a simple per-instance cache on the user object to avoid redundant DB queries.
+    """
+    if not user or not user.is_authenticated:
         return False
+    
+    if not hasattr(user, '_workspace_role_cache'):
+        user._workspace_role_cache = {}
+    
+    workspace_id = str(workspace.id) if hasattr(workspace, 'id') else str(workspace)
+    
+    if workspace_id not in user._workspace_role_cache:
+        from workspaces.models import WorkspaceMember
+        try:
+            member = WorkspaceMember.objects.get(workspace_id=workspace_id, user=user)
+            user._workspace_role_cache[workspace_id] = member.role
+        except WorkspaceMember.DoesNotExist:
+            user._workspace_role_cache[workspace_id] = None
+    
+    role = user._workspace_role_cache.get(workspace_id)
+    return role in required_roles if role else False
 
 def is_resource_owner_or_admin(user, workspace, resource):
     creator = getattr(resource, 'created_by', getattr(resource, 'uploaded_by', getattr(resource, 'author', None)))
@@ -304,7 +320,7 @@ def create_notification(user, workspace, action, description=None, note_type=Non
 def create_system_event_log(event_type, severity, message, source, workspace=None, error_code='', stack_trace='', metadata=None):
     from logs.tasks import create_system_event_log_task
     
-    workspace_id = workspace.id if workspace else None
+    workspace_id = workspace.id if hasattr(workspace, 'id') else workspace
     
     create_system_event_log_task.delay(
         event_type,

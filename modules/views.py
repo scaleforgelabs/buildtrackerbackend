@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.shortcuts import get_object_or_404
 from django.db.models import Count, Avg, Max, Sum
+from django.db.models.functions import TruncDate, ExtractHour, ExtractWeekDay
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from datetime import datetime, timedelta
@@ -180,17 +181,18 @@ async def workspace_module_analytics(request, workspaceId):
                 'last_access': user_stat['last_access']
             })
 
-        usage_by_day = []
-        current_date = date_from
-        while current_date <= date_to:
-            day_accesses = module_accesses.filter(accessed_at__date=current_date)
-            usage_by_day.append({
-                'date': current_date,
-                'sessions': day_accesses.count(),
-                'unique_users': day_accesses.values('user').distinct().count(),
-                'total_duration': day_accesses.aggregate(total=Sum('session_duration'))['total'] or 0
-            })
-            current_date += timedelta(days=1)
+        usage_by_day = list(
+            module_accesses.annotate(
+                day=TruncDate('accessed_at')
+            ).values('day').annotate(
+                sessions=Count('id'),
+                unique_users=Count('user', distinct=True),
+                total_duration=Sum('session_duration')
+            ).order_by('day')
+        )
+        # Rename 'day' key to 'date' for API consistency
+        for entry in usage_by_day:
+            entry['date'] = entry.pop('day')
 
         all_modules = ModuleAccess.objects.filter(
             workspace=workspace,
@@ -310,8 +312,8 @@ async def user_module_insights(request, userId):
             total_time=Sum('session_duration')
         ).order_by('-count').first()
 
-        peak_hour = module_accesses.extra(
-            select={'hour': 'EXTRACT(hour FROM accessed_at)'}
+        peak_hour = module_accesses.annotate(
+            hour=ExtractHour('accessed_at')
         ).values('hour').annotate(count=Count('id')).order_by('-count').first()
 
         all_modules = ['dashboard', 'tasks', 'team', 'wiki', 'integrations', 'logs', 'reports']
@@ -320,12 +322,12 @@ async def user_module_insights(request, userId):
 
         avg_duration = module_accesses.aggregate(avg=Avg('session_duration'))['avg'] or 0
 
-        daily_usage = module_accesses.extra(
-            select={'day': 'EXTRACT(dow FROM accessed_at)'}
+        daily_usage = module_accesses.annotate(
+            day=ExtractWeekDay('accessed_at')
         ).values('day').annotate(count=Count('id')).order_by('-count').first()
 
-        days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-        most_active_day = days[int(daily_usage['day'])] if daily_usage else 'N/A'
+        days = {1: 'Sunday', 2: 'Monday', 3: 'Tuesday', 4: 'Wednesday', 5: 'Thursday', 6: 'Friday', 7: 'Saturday'}
+        most_active_day = days.get(int(daily_usage['day']), 'N/A') if daily_usage else 'N/A'
 
         insights = []
 

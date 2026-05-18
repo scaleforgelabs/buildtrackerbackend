@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BuildTracker Backend Endpoint Analytics</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS Play CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        .sidebar-solid {
+            background-color: #0b0f19 !important;
+            opacity: 1 !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+        }
+        .card-solid {
+            background-color: #111827 !important;
+            opacity: 1 !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+        }
+        .card-solid-dark {
+            background-color: #030712 !important;
+            opacity: 1 !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+        }
+        .glass {
+            background: rgba(15, 23, 42, 0.45);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glow {
+            box-shadow: 0 0 40px -10px rgba(59, 130, 246, 0.15);
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+<body class="h-full text-slate-100 font-sans antialiased overflow-hidden flex flex-col bg-slate-950">
+    <!-- Header -->
+    <header class="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md px-4 sm:px-6 py-4 flex items-center justify-between flex-shrink-0 z-30">
+        <div class="flex items-center gap-3">
+            <!-- Brand Logo -->
+            <div class="h-9 w-9 bg-blue-600 rounded-xl flex items-center justify-center font-bold text-white shadow-lg shadow-blue-500/20 border border-blue-400/20">
+                BT
+            </div>
+            <div>
+                <h1 class="text-sm sm:text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                    BuildTracker <span class="px-2 py-0.5 text-[9px] sm:text-[10px] font-black uppercase tracking-wider bg-slate-800 text-slate-400 rounded border border-slate-700">Backend Engine</span>
+                </h1>
+                <p class="text-[10px] sm:text-xs text-slate-400 font-medium">Real-time API performance analytics and trace diagnostics</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-4">
+            <span class="text-[10px] sm:text-xs text-slate-400 flex items-center gap-2 bg-slate-900 border border-slate-800 px-2.5 sm:px-3 py-1.5 rounded-xl font-medium">
+                <span class="h-2 w-2 rounded-full bg-emerald-500 animate-ping"></span> <span class="hidden sm:inline">Live Trace Enabled</span><span class="sm:hidden">Active</span>
+            </span>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <div class="flex-1 flex overflow-hidden min-h-0 relative z-20">
+        <!-- Main Panel -->
+        <main class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+            <!-- KPI Summary Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+                <!-- Card 1 -->
+                <div class="glass glow rounded-3xl p-5 flex items-center gap-4 hover:border-slate-700/60 transition-colors">
+                    <div class="p-3 bg-blue-600/10 text-blue-400 rounded-2xl border border-blue-500/10">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Total API Endpoints</span>
+                        <span class="text-2xl font-black text-white" id="stat-total-endpoints">0</span>
+                        <span class="text-[10px] text-slate-400 block mt-0.5" id="stat-total-requests">0 total calls traced</span>
+                    </div>
+                </div>
+                
+                <!-- Card 2 -->
+                <div class="glass glow rounded-3xl p-5 flex items-center gap-4 hover:border-slate-700/60 transition-colors">
+                    <div class="p-3 bg-indigo-600/10 text-indigo-400 rounded-2xl border border-indigo-500/10">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Avg Latency (Global)</span>
+                        <span class="text-2xl font-black text-white" id="stat-global-latency">0 ms</span>
+                        <span class="text-[10px] text-emerald-400 block mt-0.5 font-semibold flex items-center gap-1">
+                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span> Latency Status: Stable
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Card 3 -->
+                <div class="glass glow rounded-3xl p-5 flex items-center gap-4 hover:border-slate-700/60 transition-colors">
+                    <div class="p-3 bg-emerald-600/10 text-emerald-400 rounded-2xl border border-emerald-500/10">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Avg Success Rate</span>
+                        <span class="text-2xl font-black text-white" id="stat-global-success">0.0%</span>
+                        <span class="text-[10px] text-slate-400 block mt-0.5">2xx / 3xx responses</span>
+                    </div>
+                </div>
+
+                <!-- Card 4 -->
+                <div class="glass glow rounded-3xl p-5 flex items-center gap-4 hover:border-slate-700/60 transition-colors">
+                    <div class="p-3 bg-purple-600/10 text-purple-400 rounded-2xl border border-purple-500/10">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Peak Route Load</span>
+                        <span class="text-xs font-black text-white block truncate max-w-[180px]" id="stat-peak-endpoint">N/A</span>
+                        <span class="text-[10px] text-slate-400 block mt-0.5" id="stat-peak-count">0 calls</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-4 bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
+                <div class="flex-1 flex flex-col sm:flex-row gap-3">
+                    <div class="relative flex-1">
+                        <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        </span>
+                        <input
+                            type="text"
+                            id="search-input"
+                            placeholder="Filter routes by path (e.g. /api/tasks/)..."
+                            class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-11 pr-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-blue-500 placeholder-slate-500 transition-colors"
+                        />
+                    </div>
+                    <select
+                        id="method-filter"
+                        class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-300 focus:outline-none focus:border-blue-500 transition-colors"
+                    >
+                        <option value="ALL">All Methods</option>
+                        <option value="GET">GET</option>
+                        <option value="POST">POST</option>
+                        <option value="PUT">PUT</option>
+                        <option value="DELETE">DELETE</option>
+                    </select>
+                </div>
+                <div class="text-[10px] sm:text-xs text-slate-500 font-medium px-2 lg:text-right">
+                    Click on any endpoint route row below to trace call records & log details.
+                </div>
+            </div>
+
+            <!-- Endpoint Analytics Grid/Table -->
+            <div class="glass rounded-3xl overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left" id="endpoints-table">
+                        <thead>
+                            <tr class="bg-slate-900/50 border-b border-slate-800/80">
+                                <th class="px-4 sm:px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider w-24">Method</th>
+                                <th class="px-4 sm:px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Backend Route Path</th>
+                                <th class="px-4 sm:px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider text-center">Frequency</th>
+                                <th class="px-4 sm:px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider text-center">Avg Speed</th>
+                                <th class="px-4 sm:px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider text-center hidden sm:table-cell">Peak Latency</th>
+                                <th class="px-4 sm:px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider text-center hidden md:table-cell">Min Speed</th>
+                                <th class="px-4 sm:px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider text-center">Success</th>
+                                <th class="px-4 sm:px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider text-right hidden sm:table-cell">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800/50" id="endpoints-body">
+                            {% for item in endpoints %}
+                            <tr 
+                                class="group hover:bg-slate-900/40 transition-colors cursor-pointer endpoint-row"
+                                data-method="{{ item.method }}"
+                                data-endpoint="{{ item.endpoint }}"
+                                onclick="selectEndpoint('{{ item.method }}', '{{ item.endpoint }}')"
+                            >
+                                <td class="px-4 sm:px-6 py-4">
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-black border font-mono tracking-wide
+                                        {% if item.method == 'GET' %}text-blue-400 bg-blue-500/10 border-blue-500/20
+                                        {% elif item.method == 'POST' %}text-purple-400 bg-purple-500/10 border-purple-500/20
+                                        {% elif item.method == 'PUT' %}text-amber-400 bg-amber-500/10 border-amber-500/20
+                                        {% elif item.method == 'DELETE' %}text-red-400 bg-red-500/10 border-red-500/20
+                                        {% else %}text-slate-400 bg-slate-500/10 border-slate-500/20{% endif %}"
+                                    >
+                                        {{ item.method }}
+                                    </span>
+                                </td>
+                                <td class="px-4 sm:px-6 py-4 font-mono text-xs sm:text-sm font-semibold text-white tracking-tight break-all max-w-[120px] sm:max-w-xs md:max-w-md truncate" title="{{ item.endpoint }}">
+                                    {{ item.endpoint }}
+                                </td>
+                                <td class="px-4 sm:px-6 py-4 text-center">
+                                    <span class="font-bold text-slate-200 text-xs sm:text-sm whitespace-nowrap">{{ item.count }} calls</span>
+                                </td>
+                                <td class="px-4 sm:px-6 py-4 text-center">
+                                    <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold border whitespace-nowrap
+                                        {% if item.avg_duration_ms > 500 %}text-red-400 bg-red-500/10 border-red-500/20
+                                        {% elif item.avg_duration_ms > 100 %}text-yellow-400 bg-yellow-500/10 border-yellow-500/20
+                                        {% else %}text-green-400 bg-green-500/10 border-green-500/20{% endif %}"
+                                    >
+                                        {{ item.avg_duration_ms }} ms
+                                    </span>
+                                </td>
+                                <td class="px-4 sm:px-6 py-4 text-center font-medium text-sm text-slate-400 hidden sm:table-cell whitespace-nowrap">
+                                    {{ item.max_duration_ms }} ms
+                                </td>
+                                <td class="px-4 sm:px-6 py-4 text-center font-medium text-sm text-slate-400 hidden md:table-cell whitespace-nowrap">
+                                    {{ item.min_duration_ms }} ms
+                                </td>
+                                <td class="px-4 sm:px-6 py-4 text-center">
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-black border whitespace-nowrap
+                                        {% if item.success_rate >= 95 %}text-emerald-400 bg-emerald-500/10 border-emerald-500/20
+                                        {% else %}text-red-400 bg-red-500/10 border-red-500/20{% endif %}"
+                                    >
+                                        {{ item.success_rate }}%
+                                    </span>
+                                </td>
+                                <td class="px-4 sm:px-6 py-4 text-right hidden sm:table-cell">
+                                    <button class="text-xs font-semibold text-blue-400 group-hover:text-blue-300 transition-colors flex items-center gap-1.5 ml-auto">
+                                        Trace Logs
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colSpan="8" class="px-6 py-8 text-center text-slate-500 font-medium">
+                                    No endpoint logs collected yet by the API Usage Middleware.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+
+        <!-- Dark backdrop filter overlay -->
+        <div id="panel-backdrop" class="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-30 hidden opacity-0 transition-opacity duration-300 ease-in-out" onclick="closePanel()"></div>
+
+        <!-- Dynamic Slide-Over Detail Panel -->
+        <aside id="detail-panel" class="fixed inset-y-0 right-0 z-40 w-full sm:w-[480px] md:w-[540px] lg:w-[600px] border-l border-slate-800/80 sidebar-solid shadow-2xl shadow-blue-500/5 overflow-hidden flex flex-col translate-x-full transition-transform duration-300 ease-in-out">
+            <!-- Blank State (Only visible when panel is somehow loaded empty) -->
+            <div id="detail-blank-state" class="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4">
+                <div class="h-16 w-16 bg-slate-900 rounded-3xl flex items-center justify-center border border-slate-800 text-slate-500">
+                    <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"/></svg>
+                </div>
+                <div>
+                    <h3 class="text-sm font-bold text-white">No Endpoint Selected</h3>
+                    <p class="text-xs text-slate-500 max-w-[260px] mx-auto mt-1 leading-normal">Select an API route in the master table list to trace active calls, response rates, and log payloads.</p>
+                </div>
+            </div>
+
+            <!-- Real Detail Content -->
+            <div id="detail-content" class="flex-1 flex flex-col min-h-0 hidden relative sidebar-solid">
+                <!-- Mobile Panel Close Menu Bar -->
+                <div class="sm:hidden p-3 sidebar-solid border-b border-slate-800/80 flex items-center justify-between z-30">
+                    <button onclick="closePanel()" class="flex items-center gap-2 px-3 py-1.5 card-solid hover:bg-slate-900 text-xs font-bold text-slate-300 rounded-xl border border-slate-800 transition-colors">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+                        Back to Endpoints
+                    </button>
+                    <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Diagnostic Trace</span>
+                </div>
+
+                <!-- Panel Header -->
+                <div class="p-4 sm:p-6 border-b border-slate-800/80 sidebar-solid flex items-center justify-between">
+                    <div>
+                        <div class="flex items-center gap-2 mb-1.5">
+                            <span id="detail-method" class="px-2 py-0.5 rounded-lg text-xs font-black border font-mono">GET</span>
+                            <h2 class="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Route Analysis</h2>
+                        </div>
+                        <h3 id="detail-route-title" class="text-sm sm:text-lg font-black text-white font-mono tracking-tight break-all">/api/tasks/{id}/</h3>
+                    </div>
+                    <button onclick="closePanel()" class="hidden sm:block p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-900 transition-colors">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+
+                <!-- Mobile Floating Close FAB -->
+                <div class="sm:hidden fixed bottom-6 right-6 z-50">
+                    <button onclick="closePanel()" class="h-12 px-5 bg-blue-600 hover:bg-blue-500 text-white rounded-full font-bold shadow-lg shadow-blue-500/30 flex items-center gap-2 border border-blue-400/20 active:scale-95 transition-all">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                        Close Details
+                    </button>
+                </div>
+
+                <!-- Endpoint Statistics Grid -->
+                <div class="p-4 sm:p-6 grid grid-cols-3 gap-3 sm:gap-4 border-b border-slate-800/50 sidebar-solid">
+                    <div class="card-solid-dark p-2.5 sm:p-3 rounded-2xl border border-slate-800/60 text-center">
+                        <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Calls Traced</span>
+                        <span id="detail-calls" class="text-sm sm:text-base font-black text-white">0</span>
+                    </div>
+                    <div class="card-solid-dark p-2.5 sm:p-3 rounded-2xl border border-slate-800/60 text-center">
+                        <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Avg Latency</span>
+                        <span id="detail-avg-latency" class="text-sm sm:text-base font-black text-white">0 ms</span>
+                    </div>
+                    <div class="card-solid-dark p-2.5 sm:p-3 rounded-2xl border border-slate-800/60 text-center">
+                        <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Success Rate</span>
+                        <span id="detail-success-rate" class="text-sm sm:text-base font-black text-white">0%</span>
+                    </div>
+                </div>
+
+                <!-- Call Logs Stream -->
+                <div class="flex-1 flex flex-col min-h-0 sidebar-solid">
+                    <div class="px-4 sm:px-6 py-4 border-b border-slate-800/60 sidebar-solid flex items-center justify-between">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Live Request Traces</h4>
+                        <span id="detail-trace-count" class="text-[10px] bg-slate-800 text-slate-400 font-black px-2 py-0.5 rounded-full border border-slate-700">0 traces</span>
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sidebar-solid" id="logs-container">
+                        <!-- Log Card template rendered via JS -->
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Data Injection -->
+    <script id="logs-data" type="application/json">
+        {{ detailed_logs_json|safe }}
+    </script>
+
+    <!-- Interactive Logic (Vanilla JS) -->
+    <script>
+        // Load embedded logs data
+        const logsData = JSON.parse(document.getElementById('logs-data').textContent);
+        console.log(`Loaded ${logsData.length} live logs for detailed diagnostics.`);
+
+        let activeMethod = '';
+        let activeEndpoint = '';
+
+        // Calculate global statistics
+        function computeGlobalStats() {
+            const tableRows = document.querySelectorAll('.endpoint-row');
+            document.getElementById('stat-total-endpoints').textContent = tableRows.length;
+            
+            let totalCalls = 0;
+            let totalLatency = 0;
+            let successCalls = 0;
+            let peakEndpoint = 'N/A';
+            let peakCount = 0;
+
+            const routeCounts = {};
+
+            logsData.forEach(log => {
+                totalCalls++;
+                totalLatency += log.duration_ms;
+                if (log.status_code >= 200 && log.status_code < 400) {
+                    successCalls++;
+                }
+
+                const key = `${log.method} ${log.endpoint}`;
+                routeCounts[key] = (routeCounts[key] || 0) + 1;
+                if (routeCounts[key] > peakCount) {
+                    peakCount = routeCounts[key];
+                    peakEndpoint = key;
+                }
+            });
+
+            document.getElementById('stat-total-requests').textContent = `${totalCalls} total calls traced`;
+            document.getElementById('stat-global-latency').textContent = totalCalls > 0 ? `${Math.round(totalLatency / totalCalls)} ms` : '0 ms';
+            document.getElementById('stat-global-success').textContent = totalCalls > 0 ? `${((successCalls / totalCalls) * 100).toFixed(1)}%` : '100.0%';
+            document.getElementById('stat-peak-endpoint').textContent = peakEndpoint;
+            document.getElementById('stat-peak-count').textContent = `${peakCount} calls`;
+        }
+
+        // Run global computations
+        computeGlobalStats();
+
+        // Search and Filter Logic
+        const searchInput = document.getElementById('search-input');
+        const methodFilter = document.getElementById('method-filter');
+
+        function filterEndpoints() {
+            const query = searchInput.value.toLowerCase().trim();
+            const method = methodFilter.value;
+
+            document.querySelectorAll('.endpoint-row').forEach(row => {
+                const rowMethod = row.getAttribute('data-method');
+                const rowEndpoint = row.getAttribute('data-endpoint').toLowerCase();
+
+                const matchesQuery = rowEndpoint.includes(query);
+                const matchesMethod = method === 'ALL' || rowMethod === method;
+
+                if (matchesQuery && matchesMethod) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+
+        searchInput.addEventListener('input', filterEndpoints);
+        methodFilter.addEventListener('change', filterEndpoints);
+
+        // Select Endpoint Details
+        function selectEndpoint(method, endpoint) {
+            activeMethod = method;
+            activeEndpoint = endpoint;
+
+            // Highlight row
+            document.querySelectorAll('.endpoint-row').forEach(row => {
+                const rowMethod = row.getAttribute('data-method');
+                const rowEndpoint = row.getAttribute('data-endpoint');
+                if (rowMethod === method && rowEndpoint === endpoint) {
+                    row.classList.add('bg-slate-900/60', 'border-blue-500/20');
+                } else {
+                    row.classList.remove('bg-slate-900/60', 'border-blue-500/20');
+                }
+            });
+
+            // Toggle Panels
+            document.getElementById('detail-blank-state').classList.add('hidden');
+            const detailContent = document.getElementById('detail-content');
+            detailContent.classList.remove('hidden');
+            
+            // Show backdrop with fade-in transition
+            const backdrop = document.getElementById('panel-backdrop');
+            backdrop.classList.remove('hidden');
+            setTimeout(() => {
+                backdrop.classList.remove('opacity-0');
+            }, 10);
+
+            // Slide in panel
+            const panel = document.getElementById('detail-panel');
+            panel.classList.remove('translate-x-full');
+
+            // Render stats
+            const endpointLogs = logsData.filter(log => log.method === method && log.endpoint === endpoint);
+            
+            let totalLatency = 0;
+            let successCalls = 0;
+            endpointLogs.forEach(l => {
+                totalLatency += l.duration_ms;
+                if (l.status_code >= 200 && l.status_code < 400) {
+                    successCalls++;
+                }
+            });
+
+            const avgLatency = endpointLogs.length > 0 ? Math.round(totalLatency / endpointLogs.length) : 0;
+            const successRate = endpointLogs.length > 0 ? Math.round((successCalls / endpointLogs.length) * 100) : 100;
+
+            // Update details UI
+            const methodTag = document.getElementById('detail-method');
+            methodTag.textContent = method;
+            
+            // Clean/replace method classes
+            methodTag.className = "px-2.5 py-0.5 rounded-lg text-xs font-black border font-mono";
+            if (method === 'GET') methodTag.classList.add('text-blue-400', 'bg-blue-500/10', 'border-blue-500/20');
+            else if (method === 'POST') methodTag.classList.add('text-purple-400', 'bg-purple-500/10', 'border-purple-500/20');
+            else if (method === 'PUT') methodTag.classList.add('text-amber-400', 'bg-amber-500/10', 'border-amber-500/20');
+            else if (method === 'DELETE') methodTag.classList.add('text-red-400', 'bg-red-500/10', 'border-red-500/20');
+            
+            document.getElementById('detail-route-title').textContent = endpoint;
+            document.getElementById('detail-calls').textContent = endpointLogs.length;
+            document.getElementById('detail-avg-latency').textContent = `${avgLatency} ms`;
+            document.getElementById('detail-success-rate').textContent = `${successRate}%`;
+            document.getElementById('detail-trace-count').textContent = `${endpointLogs.length} traces`;
+
+            // Render Logs Stream
+            const container = document.getElementById('logs-container');
+            container.innerHTML = '';
+
+            if (endpointLogs.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8 text-slate-500 text-xs font-medium">
+                        No individual request traces logged for this endpoint route.
+                    </div>
+                `;
+                return;
+            }
+
+            endpointLogs.forEach(log => {
+                const date = new Date(log.timestamp);
+                const timeString = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                const dateString = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+                // Latency tag color
+                let latencyClass = "text-green-400 bg-green-500/10 border-green-500/20";
+                if (log.duration_ms > 500) latencyClass = "text-red-400 bg-red-500/10 border-red-500/20";
+                else if (log.duration_ms > 100) latencyClass = "text-yellow-400 bg-yellow-500/10 border-yellow-500/20";
+
+                // Success rate status code color
+                let statusClass = "text-emerald-400 bg-emerald-500/10 border-emerald-500/20";
+                if (log.status_code >= 400) statusClass = "text-red-400 bg-red-500/10 border-red-500/20";
+
+                const logCard = document.createElement('div');
+                logCard.className = "card-solid border border-slate-800/80 p-4 rounded-2xl hover:border-slate-700 transition-colors space-y-3";
+                logCard.innerHTML = `
+                    <div class="flex items-center justify-between border-b border-slate-800/50 pb-2.5">
+                        <div class="flex items-center gap-2">
+                            <span class="px-2 py-0.5 rounded text-[10px] font-black border font-mono ${statusClass}">
+                                STATUS ${log.status_code}
+                            </span>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold border font-mono ${latencyClass}">
+                                ${log.duration_ms} ms
+                            </span>
+                        </div>
+                        <span class="text-[10px] font-bold text-slate-500">${dateString}, ${timeString}</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-y-2 text-xs">
+                        <div>
+                            <span class="text-slate-500 block text-[9px] font-bold uppercase tracking-wider">Triggered By</span>
+                            <span class="text-slate-200 font-semibold truncate max-w-[120px] block" title="${log.user}">${log.user}</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 block text-[9px] font-bold uppercase tracking-wider">Client IP Address</span>
+                            <span class="text-slate-200 font-semibold font-mono">${log.ip_address}</span>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="text-slate-500 block text-[9px] font-bold uppercase tracking-wider">Raw URL Target Path</span>
+                            <span class="text-slate-300 font-mono text-[10px] sm:text-[11px] break-all block py-1 px-2 rounded card-solid-dark border border-slate-900/60">${log.raw_endpoint}</span>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="text-slate-500 block text-[9px] font-bold uppercase tracking-wider">Client User Agent String</span>
+                            <span class="text-slate-400 text-[10px] leading-normal block max-h-12 overflow-y-auto font-mono mt-0.5 py-1 px-2 card-solid-dark rounded border border-slate-900/40">${log.user_agent}</span>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(logCard);
+            });
+        }
+
+        // Close Panel
+        function closePanel() {
+            // Slide out panel
+            const panel = document.getElementById('detail-panel');
+            panel.classList.add('translate-x-full');
+            
+            // Hide backdrop with fade-out transition
+            const backdrop = document.getElementById('panel-backdrop');
+            backdrop.classList.add('opacity-0');
+            setTimeout(() => {
+                backdrop.classList.add('hidden');
+            }, 300);
+            
+            // Remove highlighting
+            document.querySelectorAll('.endpoint-row').forEach(row => {
+                row.classList.remove('bg-slate-900/60', 'border-blue-500/20');
+            });
+        }
+    </script>
+</body>
+</html>

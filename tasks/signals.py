@@ -14,21 +14,9 @@ def clear_workspace_analytics_cache(workspace_id):
     new_version = int(time.time() * 1000)
     cache.set(version_key, new_version, 86400 * 7) # Keep version for 7 days
     
-    # Aggressive pattern clearing for backends that support it
-    try:
-        patterns = [
-            f"dashboard_stats_{workspace_id}_*",
-            f"dashboard_charts_{workspace_id}_*",
-            f"performance_analytics_{workspace_id}_*",
-            f"trends_analytics_{workspace_id}_*",
-        ]
-        if hasattr(cache, 'keys'):
-            for pattern in patterns:
-                keys = cache.keys(pattern)
-                if keys:
-                    cache.delete_many(keys)
-    except Exception as e:
-        print(f"[CACHE ERROR] Pattern delete failed: {e}")
+    # We rely on versioning for high-traffic scalability.
+    # Pattern-based deletion (keys() + delete_many()) is O(N) and can block Redis 
+    # if millions of keys exist. Bumping the version effectively hides all old data.
         
     print(f"[CACHE] Workspace {workspace_id} analytics cleared (New v{new_version})")
 

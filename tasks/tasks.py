@@ -7,6 +7,19 @@ from core.messaging import send_dual_notification
 from .models import Task, TaskComment
 from django.utils.html import strip_tags
 
+
+@shared_task
+def update_task_search_vector(task_pk):
+    """Update the search vector for a task asynchronously.
+    
+    Called from Task.save() via transaction.on_commit() to avoid
+    a blocking extra query on every task create/update.
+    """
+    from django.contrib.postgres.search import SearchVector
+    Task.objects.filter(pk=task_pk).update(
+        search_vector=SearchVector('task_name', 'task_description')
+    )
+
 @shared_task
 def send_task_assignment_email(task_id):
     try:

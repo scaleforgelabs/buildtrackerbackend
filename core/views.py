@@ -98,3 +98,17 @@ async def trigger_task(request):
 )
 def index(request):
     return JsonResponse({'message': 'BuildTracker API is running'})
+
+
+def health_check(request):
+    """Lightweight health check for load balancer probes.
+    
+    IMPORTANT: This endpoint must NOT:
+    - Require authentication
+    - Hit the database
+    - Use DRF serialization
+    - Run through heavy middleware
+    
+    It should respond in < 1ms with a simple 200 OK.
+    """
+    return JsonResponse({'status': 'ok'}, status=200)

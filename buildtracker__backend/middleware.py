@@ -10,15 +10,9 @@ class ExceptionLoggingMiddleware(MiddlewareMixin):
     def process_exception(self, request, exception):
         """Log all exceptions to SystemEventLog"""
         try:
-            workspace = None
+            workspace_id = None
             if hasattr(request, 'resolver_match') and request.resolver_match:
                 workspace_id = request.resolver_match.kwargs.get('workspaceId')
-                if workspace_id:
-                    from workspaces.models import Workspace
-                    try:
-                        workspace = Workspace.objects.get(id=workspace_id)
-                    except Workspace.DoesNotExist:
-                        pass
             
             error_type = type(exception).__name__
             error_message = str(exception)
@@ -44,7 +38,7 @@ class ExceptionLoggingMiddleware(MiddlewareMixin):
                 severity='error',
                 message=f"{error_type}: {error_message}",
                 source=request.path,
-                workspace=workspace,
+                workspace=workspace_id,
                 error_code=error_type,
                 stack_trace=stack_trace,
                 metadata={
@@ -63,7 +57,11 @@ class ExceptionLoggingMiddleware(MiddlewareMixin):
 
 
 class APIUsageTrackingMiddleware(MiddlewareMixin):
-    """Middleware to track API usage patterns"""
+    """Middleware to track API usage patterns.
+    
+    PERFORMANCE NOTE: This middleware must NEVER perform synchronous DB reads or writes.
+    All persistence is delegated to Celery tasks to avoid blocking the request cycle.
+    """
     
     def process_request(self, request):
         """Record request start time"""
@@ -71,22 +69,18 @@ class APIUsageTrackingMiddleware(MiddlewareMixin):
         return None
     
     def process_response(self, request, response):
-        """Log API usage after response"""
+        """Log API usage after response — all DB work is offloaded to Celery tasks"""
         try:
             if hasattr(request, 'user') and request.user.is_authenticated:
                 duration_ms = None
                 if hasattr(request, '_start_time'):
                     duration_ms = int((time.time() - request._start_time) * 1000)
                 
-                workspace = None
+                # Extract workspace_id from URL kwargs WITHOUT hitting the database.
+                # The Celery task will resolve the Workspace object if needed.
+                workspace_id = None
                 if hasattr(request, 'resolver_match') and request.resolver_match:
                     workspace_id = request.resolver_match.kwargs.get('workspaceId')
-                    if workspace_id:
-                        from workspaces.models import Workspace
-                        try:
-                            workspace = Workspace.objects.get(id=workspace_id)
-                        except Workspace.DoesNotExist:
-                            pass
                 
                 # Determine module from path
                 module = 'unknown'
@@ -118,32 +112,38 @@ class APIUsageTrackingMiddleware(MiddlewareMixin):
                 for key in list(query_params.keys()):
                     if any(sk in key.lower() for sk in sensitive_keys):
                         query_params[key] = '[REDACTED]'
+                
+                # Extract request metadata once (no DB calls)
+                ip_address = request.headers.get('x-forwarded-for', request.META.get('REMOTE_ADDR'))
+                user_agent = request.headers.get('user-agent', '')
 
+                # Delegate activity logging to Celery (already uses .delay() internally)
                 create_user_activity_log(
                     user=request.user,
                     activity_type='api_request',
-                    workspace=workspace,
+                    workspace=None,  # Pass None — the task resolves workspace from workspace_id
                     module=module,
                     endpoint=request.path,
                     duration_ms=duration_ms,
                     metadata={
                         'method': request.method,
                         'status_code': response.status_code,
-                        'query_params': query_params
+                        'query_params': query_params,
+                        'workspace_id': str(workspace_id) if workspace_id else None
                     },
                     request=request
                 )
                 
-                # Auto-create ModuleAccess for module navigation
+                # Delegate ModuleAccess creation to a Celery task instead of synchronous DB write
                 if module != 'unknown' and request.method == 'GET':
-                    from modules.models import ModuleAccess
-                    ModuleAccess.objects.create(
-                        user=request.user,
-                        workspace=workspace,
+                    from modules.tasks import create_module_access_task
+                    create_module_access_task.delay(
+                        user_id=str(request.user.id),
+                        workspace_id=str(workspace_id) if workspace_id else None,
                         module_name=module,
                         session_duration=duration_ms // 1000 if duration_ms else 0,
-                        ip_address=request.headers.get('x-forwarded-for', request.META.get('REMOTE_ADDR')),
-                        user_agent=request.headers.get('user-agent', '')
+                        ip_address=ip_address,
+                        user_agent=user_agent
                     )
         except Exception as log_error:
             # Don't let logging errors break the application
@@ -183,6 +183,9 @@ if not hasattr(CursorWrapper, '_patched_for_counting'):
 
 
 from django.utils.decorators import sync_and_async_middleware  # noqa: E402
+import logging as _logging  # noqa: E402
+
+_perf_logger = _logging.getLogger('buildtracker.performance')
 
 @sync_and_async_middleware
 def QueryAndTimingMiddleware(get_response):
@@ -202,8 +205,10 @@ def QueryAndTimingMiddleware(get_response):
                 duration = time.time() - start_time
                 queries = query_count_var.get()
                 status_code = getattr(response, 'status_code', 'Unknown') if 'response' in locals() else 'Error'
-                print(f"\n[ENDPOINT] {request.method} {request.path} [{status_code}]")
-                print(f"[PERFORMANCE] Time: {duration:.4f}s | DB Queries: {queries}\n")
+                _perf_logger.info(
+                    "[ENDPOINT] %s %s [%s] | Time: %.4fs | DB Queries: %d",
+                    request.method, request.path, status_code, duration, queries
+                )
                 query_count_var.reset(token)
         return middleware
     else:
@@ -217,7 +222,9 @@ def QueryAndTimingMiddleware(get_response):
                 duration = time.time() - start_time
                 queries = query_count_var.get()
                 status_code = getattr(response, 'status_code', 'Unknown') if 'response' in locals() else 'Error'
-                print(f"\n[ENDPOINT] {request.method} {request.path} [{status_code}]")
-                print(f"[PERFORMANCE] Time: {duration:.4f}s | DB Queries: {queries}\n")
+                _perf_logger.info(
+                    "[ENDPOINT] %s %s [%s] | Time: %.4fs | DB Queries: %d",
+                    request.method, request.path, status_code, duration, queries
+                )
                 query_count_var.reset(token)
         return middleware

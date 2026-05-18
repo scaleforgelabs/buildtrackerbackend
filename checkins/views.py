@@ -154,22 +154,40 @@ async def checkin_status(request, workspaceId):
                 status=status.HTTP_403_FORBIDDEN
             )
 
+        days_str = request.GET.get('days', '7')
+        try:
+            days = int(days_str)
+        except ValueError:
+            days = 7
+
         today = timezone.now().date()
-        seven_days_ago = today - timezone.timedelta(days=7)
+        start_date = today - timezone.timedelta(days=days)
 
-        recent_checkins_count = DailyCheckIn.objects.filter(
-            workspace=workspace, 
-            user=request.user, 
-            date__gt=seven_days_ago,
-            date__lte=today
-        ).values('date').distinct().count()
+        submitted_dates = set(
+            DailyCheckIn.objects.filter(
+                workspace=workspace, 
+                user=request.user, 
+                date__gt=start_date,
+                date__lte=today
+            ).values_list('date', flat=True)
+        )
 
-        missed_days = max(0, 7 - recent_checkins_count)
+        missed_dates = []
+        for i in range(1, days + 1):
+            d = today - timezone.timedelta(days=i)
+            if d not in submitted_dates:
+                missed_dates.append(d.strftime('%A, %b %d'))
+
+        missed_days = len(missed_dates)
 
         submitted = DailyCheckIn.objects.filter(
             workspace=workspace, user=request.user, date=today
         ).exists()
 
-        return Response({'submitted_today': submitted, 'missed_days': missed_days})
+        return Response({
+            'submitted_today': submitted, 
+            'missed_days': missed_days,
+            'missed_dates': missed_dates
+        })
 
     return await _sync_logic()

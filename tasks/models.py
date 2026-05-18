@@ -6,6 +6,12 @@ from django.contrib.postgres.indexes import GinIndex
 
 User = get_user_model()
 
+
+def _update_search_vector_async(task_pk):
+    """Dispatch search vector update to Celery worker."""
+    from tasks.tasks import update_task_search_vector
+    update_task_search_vector.delay(task_pk)
+
 class Task(models.Model):
     STATUS_CHOICES = [
         ('pending', 'Pending'),
@@ -58,14 +64,34 @@ class Task(models.Model):
     
     def save(self, *args, **kwargs):
         if not self.ticket_number:
-            last_task = Task.objects.filter(workspace=self.workspace).order_by('-ticket_number').first()
-            self.ticket_number = (last_task.ticket_number + 1) if last_task else 1
-        super().save(*args, **kwargs)
+            from django.db import transaction, IntegrityError
+            # Use select_for_update to prevent race conditions on concurrent task creation
+            # within the same workspace. Retry on IntegrityError as a safety net.
+            for attempt in range(3):
+                try:
+                    with transaction.atomic():
+                        last_task = (
+                            Task.objects.filter(workspace=self.workspace)
+                            .select_for_update()
+                            .order_by('-ticket_number')
+                            .first()
+                        )
+                        self.ticket_number = (last_task.ticket_number + 1) if last_task else 1
+                        super().save(*args, **kwargs)
+                    break
+                except IntegrityError:
+                    if attempt == 2:
+                        raise  # Give up after 3 attempts
+                    self.ticket_number = None  # Reset for retry
+                    continue
+        else:
+            super().save(*args, **kwargs)
         
-        from django.contrib.postgres.search import SearchVector
-        Task.objects.filter(pk=self.pk).update(
-            search_vector=SearchVector('task_name', 'task_description')
-        )
+        # Offload SearchVector update to Celery to avoid a blocking query on every save.
+        # Uses transaction.on_commit to ensure the task only fires after the save is committed.
+        from django.db import transaction
+        task_pk = str(self.pk)
+        transaction.on_commit(lambda: _update_search_vector_async(task_pk))
         
         self._old_status = self.status
         self._old_has_blocker = self.has_blocker

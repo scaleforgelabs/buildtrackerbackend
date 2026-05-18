@@ -4,9 +4,11 @@ from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework import permissions
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
+from monitoring.views import backend_endpoint_analytics
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('endpoint-analytics/', backend_endpoint_analytics, name='backend_endpoint_analytics'),
     path('api/', include('core.urls')),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('swagger/', SpectacularSwaggerView.as_view(url_name='schema', permission_classes=[permissions.AllowAny]), name='swagger-ui'),
