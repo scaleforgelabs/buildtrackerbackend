@@ -402,12 +402,12 @@ async def get_plans(request):
                 'price_naira': 0,
                 'price_usd': 0,
                 'limits': {
-                    'max_users': 5,
+                    'max_users': 10,
                     'max_workspaces': 2,
                     'max_storage_mb': 2048
                 },
                 'features': [
-                    'Up to 5 users',
+                    'Up to 10 users',
                     'Up to 2 workspaces',
                     '2GB storage',
                     'Basic support'
@@ -419,12 +419,12 @@ async def get_plans(request):
                 'price_naira': 6000,
                 'price_usd': 6,
                 'limits': {
-                    'max_users': 10,
+                    'max_users': 20,
                     'max_workspaces': 10,
                     'max_storage_mb': 10240
                 },
                 'features': [
-                    'Up to 10 users',
+                    'Up to 20 users',
                     'Up to 10 workspaces',
                     '10GB storage',
                     'Priority support',
@@ -437,12 +437,12 @@ async def get_plans(request):
                 'price_naira': 18000,
                 'price_usd': 18,
                 'limits': {
-                    'max_users': 30,
+                    'max_users': 50,
                     'max_workspaces': 30,
                     'max_storage_mb': 102400
                 },
                 'features': [
-                    'Up to 30 users',
+                    'Up to 50 users',
                     'Up to 30 workspaces',
                     '100GB storage',
                     '24/7 support',
