@@ -21,5 +21,5 @@ echo "=== Restarting services ==="
 sudo supervisorctl restart buildtracker:*
 sudo systemctl restart nginx
 
-echo "=== Done! ==="
+echo "=== Done! $(date) ==="
 sudo supervisorctl status
