@@ -10,6 +10,7 @@ from drf_spectacular.utils import extend_schema
 from datetime import datetime
 import zipfile
 import io
+import uuid as uuid_lib
 from django.http import FileResponse, Http404
 
 from .models import File, Folder
@@ -92,7 +93,11 @@ async def file_upload(request, workspaceId):
                 'message': 'Upgrade your plan to upload more files'
             }, status=status.HTTP_402_PAYMENT_REQUIRED)
 
-        folder_value = request.data.get('folder') or None
+        raw_folder = request.data.get('folder')
+        try:
+            folder_value = str(uuid_lib.UUID(str(raw_folder))) if raw_folder else None
+        except (ValueError, AttributeError):
+            folder_value = None
         serializer = FileUploadSerializer(data={'file': uploaded_file, 'folder': folder_value}, context={'request': request, 'workspace': workspace})
         if serializer.is_valid():
             file_obj = serializer.save()
