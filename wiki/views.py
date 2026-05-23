@@ -176,6 +176,29 @@ async def wiki_documents(request, workspaceId):
 
                 create_user_activity_log(user=request.user, activity_type='api_request', workspace=workspace, module='wiki', request=request)
 
+                # Notify all other workspace members about the new document
+                from workspaces.models import WorkspaceMember
+                from notifications.tasks import notify_recipients
+                member_ids = list(
+                    WorkspaceMember.objects.filter(workspace=workspace)
+                    .exclude(user=request.user)
+                    .values_list('user_id', flat=True)
+                )
+                if member_ids:
+                    creator_name = (
+                        f"{request.user.first_name} {request.user.last_name}".strip()
+                        or request.user.email
+                    )
+                    notify_recipients(
+                        recipient_ids=member_ids,
+                        workspace_id=workspace.id,
+                        action=f'New Wiki Document: {document.document_title}',
+                        description=f'{creator_name} created a new wiki document',
+                        note_type='wiki_create',
+                        severity='info',
+                        triggered_by_id=request.user.id,
+                    )
+
                 return Response({
                     'document': WikiDocumentSerializer(document, context={'request': request}).data
                 }, status=status.HTTP_201_CREATED)
@@ -290,6 +313,29 @@ async def wiki_document_detail(request, workspaceId, id):
 
                 create_user_activity_log(user=request.user, activity_type='api_request', workspace=workspace, module='wiki', request=request)
 
+                # Notify other workspace members about the update
+                from workspaces.models import WorkspaceMember
+                from notifications.tasks import notify_recipients
+                member_ids = list(
+                    WorkspaceMember.objects.filter(workspace=workspace)
+                    .exclude(user=request.user)
+                    .values_list('user_id', flat=True)
+                )
+                if member_ids:
+                    updater_name = (
+                        f"{request.user.first_name} {request.user.last_name}".strip()
+                        or request.user.email
+                    )
+                    notify_recipients(
+                        recipient_ids=member_ids,
+                        workspace_id=workspace.id,
+                        action=f'Wiki Document Updated: {document.document_title}',
+                        description=f'{updater_name} updated a wiki document',
+                        note_type='wiki_update',
+                        severity='info',
+                        triggered_by_id=request.user.id,
+                    )
+
                 return Response({'document': serializer.data})
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -324,6 +370,29 @@ async def wiki_document_detail(request, workspaceId, id):
             )
 
             create_user_activity_log(user=request.user, activity_type='api_request', workspace=workspace, module='wiki', request=request)
+
+            # Notify workspace members about the deletion
+            from workspaces.models import WorkspaceMember
+            from notifications.tasks import notify_recipients
+            member_ids = list(
+                WorkspaceMember.objects.filter(workspace=workspace)
+                .exclude(user=request.user)
+                .values_list('user_id', flat=True)
+            )
+            if member_ids:
+                deleter_name = (
+                    f"{request.user.first_name} {request.user.last_name}".strip()
+                    or request.user.email
+                )
+                notify_recipients(
+                    recipient_ids=member_ids,
+                    workspace_id=workspace.id,
+                    action=f'Wiki Document Deleted: {document_title}',
+                    description=f'{deleter_name} deleted a wiki document',
+                    note_type='wiki_delete',
+                    severity='warning',
+                    triggered_by_id=request.user.id,
+                )
 
             return Response({'message': 'Wiki document deleted successfully'})
 

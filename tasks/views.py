@@ -1313,6 +1313,57 @@ async def personal_task_detail_view(request, pk):
 
 @extend_schema(
     tags=["Tasks"],
+    summary="Upload Task Attachments",
+    description="Add one or more attachments to an existing task",
+    responses={201: {'description': 'Attachments created'}}
+)
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser])
+async def task_attachment_upload(request, workspaceId, id):
+    @sync_to_async
+    def _sync_logic():
+        workspace = get_object_or_404(Workspace, id=workspaceId)
+        if not check_workspace_permission(request.user, workspace):
+            return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+
+        task = get_object_or_404(Task, workspace=workspace, id=id)
+
+        attachment_files = request.FILES.getlist('attachments')
+        if not attachment_files:
+            return Response({'error': 'No files provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from utils import validate_file_security
+        created = []
+        for f in attachment_files:
+            is_valid, error = validate_file_security(f)
+            if not is_valid:
+                return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+            att = TaskAttachment.objects.create(
+                task=task,
+                file=f,
+                file_name=f.name,
+                file_size=f.size,
+                uploaded_by=request.user,
+            )
+            created.append(att)
+
+        create_user_activity_log(
+            user=request.user,
+            activity_type='api_request',
+            workspace=workspace,
+            module='tasks',
+            request=request,
+        )
+        return Response(
+            TaskAttachmentSerializer(created, many=True, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+    return await _sync_logic()
+
+
+@extend_schema(
+    tags=["Tasks"],
     summary="Download Task Attachment",
     description="Download a specific attachment from a task",
     responses={200: {'description': 'File stream'}}

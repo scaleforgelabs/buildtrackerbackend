@@ -3,154 +3,282 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Import Poppins to match the frontend -->
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>{{ subject }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background-color: #F8FAFC;
-            margin: 0;
-            padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #F1F5F9;
             color: #0F172A;
             -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
         }
-        .email-wrapper {
+        .wrapper {
             width: 100%;
-            background-color: #F8FAFC;
-            padding: 64px 20px;
-            box-sizing: border-box;
+            background-color: #F1F5F9;
+            padding: 48px 16px 64px;
         }
-        .email-content {
-            max-width: 560px;
+        .card {
+            max-width: 580px;
             margin: 0 auto;
             background-color: #FFFFFF;
-            border-radius: 12px;
+            border-radius: 16px;
             overflow: hidden;
-            box-shadow: 0 12px 32px rgba(15, 23, 42, 0.04), 0 2px 8px rgba(15, 23, 42, 0.02);
             border: 1px solid #E2E8F0;
+            box-shadow: 0 4px 24px rgba(15, 23, 42, 0.06), 0 1px 4px rgba(15, 23, 42, 0.03);
         }
-        .email-body {
-            padding: 48px;
+        /* Top accent stripe — colour injected per-email */
+        .accent-bar {
+            height: 5px;
+            width: 100%;
+            background-color: {{ accent_color|default:"#4372E9" }};
         }
+        .card-body {
+            padding: 40px 44px 36px;
+        }
+        /* Logo */
         .logo {
-            display: inline-block;
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 700;
             color: #0F172A;
+            letter-spacing: -0.4px;
+            margin-bottom: 32px;
+            display: block;
             text-decoration: none;
-            letter-spacing: -0.5px;
-            margin-bottom: 40px;
         }
-        .logo span {
-            color: #4372E9;
+        .logo-dot { color: {{ accent_color|default:"#4372E9" }}; }
+
+        /* Type chip */
+        .type-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.6px;
+            text-transform: uppercase;
+            color: {{ accent_color|default:"#4372E9" }};
+            background-color: {{ accent_bg|default:"#EFF4FF" }};
+            border: 1px solid {{ accent_border|default:"#C7D7FD" }};
+            border-radius: 20px;
+            padding: 4px 10px;
+            margin-bottom: 20px;
         }
+
+        /* Heading */
         h2 {
-            font-size: 20px;
+            font-size: 22px;
+            font-weight: 700;
             color: #0F172A;
-            margin: 0 0 20px 0;
-            font-weight: 600;
-            line-height: 1.4;
-            letter-spacing: -0.3px;
+            line-height: 1.35;
+            letter-spacing: -0.4px;
+            margin-bottom: 12px;
         }
-        .message-content {
+
+        /* Greeting */
+        .greeting {
             font-size: 15px;
-            line-height: 1.7;
             color: #334155;
-            word-wrap: break-word;
-            margin: 0;
+            margin-bottom: 16px;
         }
-        .message-content a {
-            color: #4372E9;
+
+        /* Message body */
+        .message {
+            font-size: 15px;
+            line-height: 1.75;
+            color: #475569;
+        }
+        .message a {
+            color: {{ accent_color|default:"#4372E9" }};
             text-decoration: none;
             font-weight: 500;
         }
-        .message-content a:hover {
-            text-decoration: underline;
-        }
-        .action-container {
-            margin-top: 40px;
-        }
-        .button-primary {
-            display: inline-block;
-            background-color: #4372E9;
-            color: #FFFFFF !important;
-            padding: 14px 28px;
-            font-size: 15px;
-            font-weight: 500;
-            border-radius: 8px;
-            text-decoration: none !important;
-            box-shadow: 0 4px 12px rgba(67, 114, 233, 0.2);
-            transition: all 0.2s ease;
-        }
-        .button-primary:hover {
-            background-color: #3562D5;
-            box-shadow: 0 6px 16px rgba(67, 114, 233, 0.3);
-            transform: translateY(-1px);
-        }
-        .email-footer {
+
+        /* Metadata table */
+        .meta-card {
+            margin-top: 28px;
             background-color: #F8FAFC;
-            padding: 32px 48px;
-            border-top: 1px solid #E2E8F0;
-            font-size: 13px;
-            line-height: 1.6;
-            color: #64748B;
+            border: 1px solid #E2E8F0;
+            border-radius: 10px;
+            overflow: hidden;
         }
-        .email-footer p {
-            margin: 0 0 10px 0;
+        .meta-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 0;
+            border-bottom: 1px solid #E2E8F0;
         }
-        .footer-logo {
+        .meta-row:last-child { border-bottom: none; }
+        .meta-label {
+            width: 120px;
+            min-width: 120px;
+            font-size: 12px;
             font-weight: 600;
-            color: #475569;
-            margin-bottom: 12px;
+            color: #94A3B8;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            padding: 11px 14px;
+            border-right: 1px solid #E2E8F0;
+            background-color: #F1F5F9;
+        }
+        .meta-value {
+            flex: 1;
+            font-size: 13px;
+            font-weight: 500;
+            color: #1E293B;
+            padding: 11px 14px;
+            word-break: break-word;
+        }
+        .meta-value.badge {
             display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        /* Priority badges */
+        .badge-high    { background: #FEE2E2; color: #DC2626; }
+        .badge-medium  { background: #FEF3C7; color: #D97706; }
+        .badge-low     { background: #DCFCE7; color: #16A34A; }
+        /* Status badges */
+        .badge-completed    { background: #DCFCE7; color: #16A34A; }
+        .badge-in_progress  { background: #DBEAFE; color: #2563EB; }
+        .badge-pending      { background: #F1F5F9; color: #64748B; }
+        .badge-blocked      { background: #FEE2E2; color: #DC2626; }
+
+        /* CTA button */
+        .cta { margin-top: 32px; }
+        .btn {
+            display: inline-block;
+            background-color: {{ accent_color|default:"#4372E9" }};
+            color: #FFFFFF !important;
+            text-decoration: none !important;
             font-size: 14px;
+            font-weight: 600;
+            padding: 13px 28px;
+            border-radius: 8px;
+            letter-spacing: 0.1px;
+            box-shadow: 0 2px 8px rgba(67, 114, 233, 0.25);
         }
-        .footer-links {
-            margin-top: 20px;
+
+        /* Divider */
+        .divider {
+            height: 1px;
+            background-color: #E2E8F0;
+            margin: 32px 0 0;
         }
+
+        /* Footer */
+        .card-footer {
+            background-color: #F8FAFC;
+            padding: 24px 44px;
+            border-top: 1px solid #E2E8F0;
+        }
+        .footer-brand {
+            font-size: 13px;
+            font-weight: 700;
+            color: #64748B;
+            margin-bottom: 6px;
+            letter-spacing: -0.2px;
+        }
+        .footer-brand span { color: {{ accent_color|default:"#4372E9" }}; }
+        .footer-text {
+            font-size: 12px;
+            color: #94A3B8;
+            line-height: 1.6;
+            margin-bottom: 14px;
+        }
+        .footer-links { display: flex; gap: 16px; }
         .footer-links a {
+            font-size: 12px;
             color: #94A3B8;
             text-decoration: none;
-            margin-right: 20px;
             font-weight: 500;
-            transition: color 0.2s ease;
         }
-        .footer-links a:hover {
+        .footer-links a:hover { color: {{ accent_color|default:"#4372E9" }}; }
+        .footer-made {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #E2E8F0;
+            font-size: 12px;
+            color: #94A3B8;
+        }
+        .footer-made a {
             color: #4372E9;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        @media (max-width: 600px) {
+            .card-body { padding: 28px 24px 24px; }
+            .card-footer { padding: 20px 24px; }
+            h2 { font-size: 19px; }
+            .meta-label { width: 90px; min-width: 90px; }
         }
     </style>
 </head>
 <body>
-    <div class="email-wrapper">
-        <div class="email-content">
-            <div class="email-body">
-                <a href="#" class="logo">BuildTracker<span>.</span></a>
-                
+    <div class="wrapper">
+        <div class="card">
+            <!-- Accent top stripe -->
+            <div class="accent-bar"></div>
+
+            <div class="card-body">
+                <!-- Logo -->
+                <a href="{{ frontend_url|default:'#' }}" class="logo">BuildTracker<span class="logo-dot">.</span></a>
+
+                <!-- Type chip (e.g. "Task Assigned") -->
+                {% if chip_label %}
+                <div class="type-chip">{{ chip_label }}</div>
+                {% endif %}
+
+                <!-- Headline -->
                 {% if subject %}
                 <h2>{{ subject }}</h2>
                 {% endif %}
-                
-                <div class="message-content">
-                    {{ message|urlize|linebreaksbr }}
+
+                <!-- Greeting -->
+                {% if recipient_name %}
+                <p class="greeting">Hi {{ recipient_name }},</p>
+                {% endif %}
+
+                <!-- Body message -->
+                {% if message %}
+                <div class="message">{{ message|linebreaksbr }}</div>
+                {% endif %}
+
+                <!-- Structured metadata -->
+                {% if metadata_rows %}
+                <div class="meta-card">
+                    {% for row in metadata_rows %}
+                    <div class="meta-row">
+                        <span class="meta-label">{{ row.label }}</span>
+                        <span class="meta-value">{{ row.value }}</span>
+                    </div>
+                    {% endfor %}
                 </div>
-                
+                {% endif %}
+
+                <!-- Call-to-action button -->
                 {% if action_url %}
-                <div class="action-container">
-                    <a href="{{ action_url }}" class="button-primary">{{ action_text }}</a>
+                <div class="cta">
+                    <a href="{{ action_url }}" class="btn">{{ action_text|default:"Open in BuildTracker" }}</a>
                 </div>
                 {% endif %}
             </div>
-            
-            <div class="email-footer">
-                <div class="footer-logo">BuildTracker Co.</div>
-                <p>This is an automated notification sent from your workspace.</p>
-                <p>Please do not reply directly to this email.</p>
+
+            <!-- Footer -->
+            <div class="card-footer">
+                <div class="footer-brand">BuildTracker<span>.</span></div>
+                <p class="footer-text">
+                    This is an automated notification from your BuildTracker workspace.<br>
+                    Please do not reply directly to this email.
+                </p>
                 <div class="footer-links">
                     <a href="#">Privacy Policy</a>
                     <a href="#">Terms of Service</a>
                     <a href="#">Support</a>
                 </div>
+                <p class="footer-made">Made with 💙 by <a href="{{ frontend_url|default:'#' }}">BuildTracker</a></p>
             </div>
         </div>
     </div>

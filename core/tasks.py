@@ -31,16 +31,17 @@ def cleanup_cache():
     return "Cache cleaned up"
 
 @shared_task
-def send_email_task(subject, message, recipient_list, fail_silently=False):
+def send_email_task(subject, message, recipient_list, fail_silently=False, extra_context=None):
     send_beautiful_email(
         subject=subject,
         message=message,
         recipient_list=recipient_list,
         fail_silently=fail_silently,
+        extra_context=extra_context or {},
     )
 
 @shared_task
-def send_dual_notification_task(user_id, subject, message, fail_silently=False):
+def send_dual_notification_task(user_id, subject, message, fail_silently=False, extra_context=None):
     try:
         user = CustomUser.objects.get(id=user_id)
     except CustomUser.DoesNotExist:
@@ -52,7 +53,8 @@ def send_dual_notification_task(user_id, subject, message, fail_silently=False):
             subject=subject,
             message=message,
             recipient_list=[user.email],
-            fail_silently=fail_silently
+            fail_silently=fail_silently,
+            extra_context=extra_context or {},
         )
         if email_sent:
             logger.info(f"Email sent successfully to {user.email}")
