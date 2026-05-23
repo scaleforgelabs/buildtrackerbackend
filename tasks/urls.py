@@ -7,7 +7,7 @@ urlpatterns = [
     path('personal-tasks/<uuid:pk>/', views.personal_task_detail_view, name='personal_task_detail'),
     
     path('workspaces/<uuid:workspaceId>/', views.workspace_tasks, name='workspace_tasks'),
-    path('workspaces/<uuid:workspaceId>/ticket/<int:ticketNumber>/', views.task_by_ticket, name='task_by_ticket'),
+    path('workspaces/<str:workspaceId>/ticket/<int:ticketNumber>/', views.task_by_ticket, name='task_by_ticket'),
     path('workspaces/<uuid:workspaceId>/<uuid:id>/', views.task_detail, name='task_detail'),
     path('workspaces/<uuid:workspaceId>/<uuid:id>/status/', views.update_task_status, name='update_task_status'),
     path('workspaces/<uuid:workspaceId>/<uuid:id>/assign/', views.assign_task, name='assign_task'),
