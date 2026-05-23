@@ -1200,6 +1200,57 @@ async def task_comment_detail(request, workspaceId, taskId, commentId):
 
     return await _sync_logic()
 
+
+@extend_schema(
+    tags=["Tasks"],
+    summary="Task by Ticket Number",
+    description="Fetch full task detail (task, comments, attachments) by workspace-scoped ticket number.",
+    responses={200: {'description': 'Task details'}, 404: {'description': 'Task not found'}}
+)
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+async def task_by_ticket(request, workspaceId, ticketNumber):
+    @sync_to_async
+    def _sync_logic():
+        workspace = get_object_or_404(Workspace, id=workspaceId)
+
+        if not check_workspace_permission(request.user, workspace):
+            return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+
+        task = get_object_or_404(
+            Task.objects.select_related('assigned_to', 'created_by').prefetch_related(
+                'comments__user', 'comments__attachments', 'attachments'
+            ),
+            workspace=workspace,
+            ticket_number=ticketNumber,
+        )
+
+        create_user_activity_log(
+            user=request.user,
+            activity_type='api_request',
+            workspace=workspace,
+            module='tasks',
+            request=request,
+        )
+
+        serializer = TaskSerializer(task, context={'request': request})
+        return Response({
+            'task': serializer.data,
+            'comments': TaskCommentSerializer(
+                task.comments.all().filter(parent_comment__isnull=True).order_by('created_at'),
+                many=True,
+                context={'request': request},
+            ).data,
+            'attachments': TaskAttachmentSerializer(
+                task.attachments.all(), many=True, context={'request': request}
+            ).data,
+            'assigned_user': serializer.data.get('assigned_user'),
+            'created_by_user': serializer.data.get('created_by_user'),
+        })
+
+    return await _sync_logic()
+
+
 @extend_schema(tags=["Personal Tasks"])
 @api_view(['GET', 'POST', 'DELETE'])
 @permission_classes([permissions.IsAuthenticated])
