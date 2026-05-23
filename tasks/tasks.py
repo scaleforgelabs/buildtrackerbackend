@@ -150,7 +150,7 @@ def send_task_due_reminder_email(task_id):
         else:
             urgency = f"This task is due in {days_left} days."
 
-        subject = f"Reminder: "{task.task_name}" is due soon"
+        subject = f'Reminder: "{task.task_name}" is due soon'
         message = f"{urgency} Please review your progress and update the task status."
 
         metadata_rows = [
