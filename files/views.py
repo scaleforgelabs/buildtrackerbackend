@@ -92,7 +92,8 @@ async def file_upload(request, workspaceId):
                 'message': 'Upgrade your plan to upload more files'
             }, status=status.HTTP_402_PAYMENT_REQUIRED)
 
-        serializer = FileUploadSerializer(data={'file': uploaded_file, 'folder': request.data.get('folder')}, context={'request': request, 'workspace': workspace})
+        folder_value = request.data.get('folder') or None
+        serializer = FileUploadSerializer(data={'file': uploaded_file, 'folder': folder_value}, context={'request': request, 'workspace': workspace})
         if serializer.is_valid():
             file_obj = serializer.save()
 
