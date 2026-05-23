@@ -3,7 +3,7 @@ set -e
 
 echo "=== Pulling latest code ==="
 cd /home/buildtracker/api
-git pull origin lateef
+git pull origin main
 
 echo "=== Activating venv ==="
 source /home/buildtracker/api/venv/bin/activate
