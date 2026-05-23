@@ -1,3 +1,5 @@
+import uuid as uuid_lib
+
 from adrf.decorators import api_view
 from asgiref.sync import sync_to_async
 from rest_framework import status, permissions
@@ -1212,7 +1214,11 @@ async def task_comment_detail(request, workspaceId, taskId, commentId):
 async def task_by_ticket(request, workspaceId, ticketNumber):
     @sync_to_async
     def _sync_logic():
-        workspace = get_object_or_404(Workspace, id=workspaceId)
+        try:
+            ws_uuid = uuid_lib.UUID(str(workspaceId))
+            workspace = get_object_or_404(Workspace, id=ws_uuid)
+        except (ValueError, AttributeError):
+            workspace = get_object_or_404(Workspace, slug=workspaceId)
 
         if not check_workspace_permission(request.user, workspace):
             return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
