@@ -403,10 +403,19 @@ def get_trends_analytics(workspace, period='weekly', date_from=None, date_to=Non
     
     end_date = date_to if date_to else timezone.now().date()
     
-    if period == 'weekly':
+    if period == 'daily':
+        start_date = date_from if date_from else (end_date - timedelta(days=30))
+        delta = timedelta(days=1)
+    elif period == 'weekly':
         start_date = date_from if date_from else (end_date - timedelta(weeks=12))
         delta = timedelta(weeks=1)
     elif period == 'monthly':
+        start_date = date_from if date_from else (end_date - timedelta(days=365))
+        delta = timedelta(days=30)
+    elif period == 'quarterly':
+        start_date = date_from if date_from else (end_date - timedelta(weeks=13))
+        delta = timedelta(weeks=1)
+    elif period == 'yearly':
         start_date = date_from if date_from else (end_date - timedelta(days=365))
         delta = timedelta(days=30)
     else:
@@ -418,79 +427,71 @@ def get_trends_analytics(workspace, period='weekly', date_from=None, date_to=Non
     
     task_creation_trend = []
     completion_trend = []
-    velocity_trend = []
-    milestone_trend = []
-    
+    pending_trend = []
+
     prev_created = 0
     prev_completed = 0
-    
+
     current_date = start_date
-    
+
     created_counts = dict(
-        tasks.filter(created_at__date__range=[start_date, end_date + delta])
+        Task.objects.filter(workspace=workspace, created_at__date__range=[start_date, end_date + delta])
         .annotate(date=TruncDate('created_at'))
         .values('date')
         .annotate(count=Count('id'))
         .values_list('date', 'count')
     )
     completed_counts = dict(
-        tasks.filter(status='completed', updated_at__date__range=[start_date, end_date + delta])
+        Task.objects.filter(workspace=workspace, status='completed', updated_at__date__range=[start_date, end_date + delta])
         .annotate(date=TruncDate('updated_at'))
         .values('date')
         .annotate(count=Count('id'))
         .values_list('date', 'count')
     )
-    milestone_completed_counts = dict(
-        tasks.filter(status='completed', milestone__isnull=False, updated_at__date__range=[start_date, end_date + delta])
+    pending_counts = dict(
+        Task.objects.filter(workspace=workspace, status='pending', updated_at__date__range=[start_date, end_date + delta])
         .annotate(date=TruncDate('updated_at'))
         .values('date')
         .annotate(count=Count('id'))
         .values_list('date', 'count')
     )
-    
+
     while current_date <= end_date:
         period_end = min(current_date + delta, end_date)
-        
+
         created_count = sum(count for d, count in created_counts.items() if d and current_date <= d <= period_end)
         completed_count = sum(count for d, count in completed_counts.items() if d and current_date <= d <= period_end)
-        milestone_completed = sum(count for d, count in milestone_completed_counts.items() if d and current_date <= d <= period_end)
-        
+        pending_count = sum(count for d, count in pending_counts.items() if d and current_date <= d <= period_end)
+
         created_change = ((created_count - prev_created) / max(prev_created, 1)) * 100 if prev_created > 0 else 0
         completed_change = ((completed_count - prev_completed) / max(prev_completed, 1)) * 100 if prev_completed > 0 else 0
-        
+
         task_creation_trend.append({
             'date': current_date,
             'value': created_count,
             'change_percentage': round(created_change, 1)
         })
-        
+
         completion_trend.append({
             'date': current_date,
             'value': completed_count,
             'change_percentage': round(completed_change, 1)
         })
-        
-        velocity_trend.append({
+
+        pending_trend.append({
             'date': current_date,
-            'value': completed_count / 7 if period == 'weekly' else completed_count,
-            'change_percentage': round(completed_change, 1)
+            'value': pending_count,
+            'change_percentage': 0
         })
-        
-        milestone_trend.append({
-            'date': current_date,
-            'value': milestone_completed,
-            'change_percentage': round(completed_change, 1)
-        })
-        
+
         prev_created = created_count
         prev_completed = completed_count
         current_date = period_end + timedelta(days=1)
-    
+
     trends = {
         'taskCreationTrend': task_creation_trend,
         'completionTrend': completion_trend,
-        'velocityTrend': velocity_trend,
-        'milestoneTrend': milestone_trend
+        'pendingTrend': pending_trend,
     }
     
     if trends and not bypass_cache:
