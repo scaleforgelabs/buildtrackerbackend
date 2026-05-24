@@ -8,6 +8,7 @@ from django.utils import timezone
 from datetime import timedelta
 from drf_spectacular.utils import extend_schema
 from permissions import IsAdmin, IsSuperAdmin
+from .models import ContentPost, SalesLead
 
 User = get_user_model()
 
@@ -421,4 +422,175 @@ async def admin_newsletter_view(request):
             'recipient_count': queued,
             'audience': audience,
         })
+    return await _sync()
+
+
+# ─── content hub ─────────────────────────────────────────────────────────────
+
+def _content_row(p):
+    return {
+        'id': p.id,
+        'platform': p.platform,
+        'content_pillar': p.content_pillar,
+        'tone': p.tone,
+        'hook': p.hook,
+        'full_copy': p.full_copy,
+        'visual_direction': p.visual_direction,
+        'hashtags': p.hashtags,
+        'status': p.status,
+        'priority': p.priority,
+        'week': p.week,
+        'day': p.day,
+        'scheduled_date': p.scheduled_date.isoformat() if p.scheduled_date else None,
+        'posted_date': p.posted_date.isoformat() if p.posted_date else None,
+        'notes': p.notes,
+        'updated_at': p.updated_at.isoformat(),
+    }
+
+
+@extend_schema(tags=["Admin Dashboard"], summary="List Content Posts")
+@api_view(['GET'])
+@permission_classes([IsAdmin])
+async def admin_content_list_view(request):
+    @sync_to_async
+    def _sync():
+        from django.db.models import Q
+        page = int(request.query_params.get('page', 1))
+        page_size = 20
+        offset = (page - 1) * page_size
+        search = request.query_params.get('search', '').strip()
+        platform = request.query_params.get('platform', '').strip()
+        content_status = request.query_params.get('status', '').strip()
+
+        qs = ContentPost.objects.all()
+        if search:
+            qs = qs.filter(Q(hook__icontains=search) | Q(content_pillar__icontains=search))
+        if platform:
+            qs = qs.filter(platform=platform)
+        if content_status:
+            qs = qs.filter(status=content_status)
+
+        total = qs.count()
+        posts = [_content_row(p) for p in qs.order_by('platform', 'id')[offset:offset + page_size]]
+        return Response({'posts': posts, 'total': total, 'page': page, 'page_size': page_size})
+    return await _sync()
+
+
+@extend_schema(tags=["Admin Dashboard"], summary="Update Content Post Status")
+@api_view(['PATCH'])
+@permission_classes([IsAdmin])
+async def admin_content_update_view(request, post_id):
+    @sync_to_async
+    def _sync():
+        try:
+            post = ContentPost.objects.get(id=post_id)
+        except ContentPost.DoesNotExist:
+            return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        allowed_fields = ('status', 'priority', 'scheduled_date', 'posted_date', 'notes',
+                          'hook', 'full_copy', 'hashtags')
+        for field in allowed_fields:
+            if field in request.data:
+                setattr(post, field, request.data[field] or None if field.endswith('_date') else request.data[field])
+        post.save()
+        return Response(_content_row(post))
+    return await _sync()
+
+
+# ─── sales leads ─────────────────────────────────────────────────────────────
+
+def _lead_row(lead):
+    return {
+        'id': lead.id,
+        'priority': lead.priority,
+        'company': lead.company,
+        'website': lead.website,
+        'sector': lead.sector,
+        'stage': lead.stage,
+        'city': lead.city,
+        'target_title': lead.target_title,
+        'linkedin_search_url': lead.linkedin_search_url,
+        'pain_angle': lead.pain_angle,
+        'dm_template': lead.dm_template,
+        'status': lead.status,
+        'date_contacted': lead.date_contacted.isoformat() if lead.date_contacted else None,
+        'follow_up_date': lead.follow_up_date.isoformat() if lead.follow_up_date else None,
+        'notes': lead.notes,
+        'updated_at': lead.updated_at.isoformat(),
+    }
+
+
+@extend_schema(tags=["Admin Dashboard"], summary="List Sales Leads")
+@api_view(['GET'])
+@permission_classes([IsAdmin])
+async def admin_leads_list_view(request):
+    @sync_to_async
+    def _sync():
+        from django.db.models import Q
+        page = int(request.query_params.get('page', 1))
+        page_size = 25
+        offset = (page - 1) * page_size
+        search = request.query_params.get('search', '').strip()
+        priority = request.query_params.get('priority', '').strip()
+        lead_status = request.query_params.get('status', '').strip()
+        sector = request.query_params.get('sector', '').strip()
+        stage = request.query_params.get('stage', '').strip()
+
+        qs = SalesLead.objects.all()
+        if search:
+            qs = qs.filter(Q(company__icontains=search) | Q(sector__icontains=search))
+        if priority:
+            qs = qs.filter(priority=priority)
+        if lead_status:
+            qs = qs.filter(status=lead_status)
+        if sector:
+            qs = qs.filter(sector__icontains=sector)
+        if stage:
+            qs = qs.filter(stage=stage)
+
+        total = qs.count()
+        leads = [_lead_row(l) for l in qs.order_by('priority', 'company')[offset:offset + page_size]]
+
+        # Summary counts
+        from django.db.models import Count
+        status_summary = {
+            row['status']: row['count']
+            for row in SalesLead.objects.values('status').annotate(count=Count('id'))
+        }
+        priority_summary = {
+            row['priority']: row['count']
+            for row in SalesLead.objects.values('priority').annotate(count=Count('id'))
+        }
+
+        return Response({
+            'leads': leads,
+            'total': total,
+            'page': page,
+            'page_size': page_size,
+            'status_summary': status_summary,
+            'priority_summary': priority_summary,
+        })
+    return await _sync()
+
+
+@extend_schema(tags=["Admin Dashboard"], summary="Update Sales Lead")
+@api_view(['PATCH'])
+@permission_classes([IsAdmin])
+async def admin_lead_update_view(request, lead_id):
+    @sync_to_async
+    def _sync():
+        try:
+            lead = SalesLead.objects.get(id=lead_id)
+        except SalesLead.DoesNotExist:
+            return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        allowed_fields = ('status', 'notes', 'date_contacted', 'follow_up_date', 'priority')
+        for field in allowed_fields:
+            if field in request.data:
+                val = request.data[field]
+                if field.endswith('_date') and not val:
+                    val = None
+                setattr(lead, field, val)
+        lead.save()
+        return Response(_lead_row(lead))
     return await _sync()

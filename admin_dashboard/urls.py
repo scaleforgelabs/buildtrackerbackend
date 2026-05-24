@@ -11,4 +11,10 @@ urlpatterns = [
     path('analytics/', views.admin_analytics_view, name='admin-analytics'),
     path('subscriptions/', views.admin_subscriptions_view, name='admin-subscriptions'),
     path('newsletter/', views.admin_newsletter_view, name='admin-newsletter'),
+    # Content Hub
+    path('content/', views.admin_content_list_view, name='admin-content-list'),
+    path('content/<int:post_id>/', views.admin_content_update_view, name='admin-content-update'),
+    # Sales CRM
+    path('leads/', views.admin_leads_list_view, name='admin-leads-list'),
+    path('leads/<int:lead_id>/', views.admin_lead_update_view, name='admin-lead-update'),
 ]
