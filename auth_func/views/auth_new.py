@@ -974,7 +974,8 @@ async def me_view(request):
                 'phone': user.phone,
                 'bio': user.bio,
                 'avatar': user.avatar.url if user.avatar else None,
-                'last_active_workspace': user.last_active_workspace
+                'last_active_workspace': user.last_active_workspace,
+                'platform_role': user.platform_role,
             }
         }
 

@@ -33,6 +33,7 @@ urlpatterns = [
     path('api/checkins/', include('checkins.urls')),
     path('api/', include('notifications.urls')),
     path('api/', include('widgets.urls')),
+    path('api/admin-dashboard/', include('admin_dashboard.urls')),
 ]
 
 if settings.DEBUG:

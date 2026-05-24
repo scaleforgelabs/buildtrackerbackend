@@ -12,13 +12,19 @@ class CustomUser(AbstractUser):
         ('pro', 'Pro'),
         ('enterprise', 'Enterprise'),
     ]
-    
+
     STATUS_CHOICES = [
         ('active', 'Active'),
         ('inactive', 'Inactive'),
         ('pending', 'Pending'),
     ]
-    
+
+    PLATFORM_ROLE_CHOICES = [
+        ('user', 'User'),
+        ('admin', 'Admin'),
+        ('super_admin', 'Super Admin'),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(unique=True, null=False, blank=False)
     first_name = models.CharField(max_length=30, blank=True)
@@ -28,6 +34,7 @@ class CustomUser(AbstractUser):
     bio = models.TextField(blank=True)
     avatar = models.ImageField(upload_to='avatars/', null=True, blank=True)
     billing_email = models.EmailField(null=True, blank=True)
+    platform_role = models.CharField(max_length=20, choices=PLATFORM_ROLE_CHOICES, default='user', db_index=True)
     plan_type = models.CharField(max_length=20, choices=PLAN_CHOICES, default='free')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active', db_index=True)
     is_verified = models.BooleanField(default=False)

@@ -102,6 +102,7 @@ INSTALLED_APPS = [
     'widgets',
     'checkins',
     'storages',
+    'admin_dashboard',
 ]
 
 MIDDLEWARE = [
