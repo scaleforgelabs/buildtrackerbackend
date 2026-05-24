@@ -166,7 +166,7 @@ async def admin_workspaces_view(request):
 
         qs = Workspace.objects.select_related('owner').annotate(
             member_count=Count('members', distinct=True),
-            task_count=Count('task', distinct=True),
+            task_count=Count('tasks', distinct=True),
         )
         if search:
             qs = qs.filter(Q(name__icontains=search) | Q(owner__email__icontains=search))
@@ -264,7 +264,7 @@ async def admin_analytics_view(request):
         # Top workspaces by task count
         from django.db.models import Count as C
         top_workspaces = list(
-            Workspace.objects.annotate(task_count=C('task', distinct=True))
+            Workspace.objects.annotate(task_count=C('tasks', distinct=True))
             .order_by('-task_count')[:10]
             .values('name', 'type', 'task_count', 'slug')
         )
