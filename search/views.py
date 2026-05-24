@@ -67,14 +67,15 @@ def search_tasks(search_key, workspaces, workspace_filter=None, milestone=None, 
             'title': task.task_name,
             'content': task.task_description or '',
             'type': 'task',
-            'workspace_id': task.workspace.id,
+            'workspace_id': str(task.workspace.id),
+            'workspace_slug': task.workspace.slug or str(task.workspace.id),
             'workspace_name': task.workspace.name,
             'created_at': task.created_at,
             'updated_at': task.updated_at,
             'relevance_score': 1.0,
-            'url': '/tasks'
+            'url': f'/tasks/{task.ticket_number}'
         })
-    
+
     return results
 
 def search_wiki(search_key, workspaces, workspace_filter=None):
@@ -95,14 +96,15 @@ def search_wiki(search_key, workspaces, workspace_filter=None):
             'title': doc.document_title,
             'content': desc[:200] + '...' if len(desc) > 200 else desc,
             'type': 'wiki',
-            'workspace_id': doc.workspace.id,
+            'workspace_id': str(doc.workspace.id),
+            'workspace_slug': doc.workspace.slug or str(doc.workspace.id),
             'workspace_name': doc.workspace.name,
             'created_at': doc.created_at,
             'updated_at': doc.updated_at,
             'relevance_score': 1.0,
-            'url': f'/wiki/{doc.id}'
+            'url': '/wiki'
         })
-    
+
     return results
 
 def search_integrations(search_key, workspaces, workspace_filter=None):
@@ -120,18 +122,19 @@ def search_integrations(search_key, workspaces, workspace_filter=None):
     results = []
     for integration in queryset:
         results.append({
-            'id': integration.id,
+            'id': str(integration.id),
             'title': integration.name,
             'content': integration.description or '',
             'type': 'integration',
-            'workspace_id': integration.workspace.id,
+            'workspace_id': str(integration.workspace.id),
+            'workspace_slug': integration.workspace.slug or str(integration.workspace.id),
             'workspace_name': integration.workspace.name,
             'created_at': integration.created_at,
             'updated_at': integration.updated_at,
             'relevance_score': 1.0,
-            'url': f'/integrations/{integration.id}'
+            'url': '/integrations'
         })
-    
+
     return results
 
 def search_team(search_key, workspaces, workspace_filter=None):
@@ -159,14 +162,15 @@ def search_team(search_key, workspaces, workspace_filter=None):
             'title': full_name,
             'content': member.job_role or member.role,
             'type': 'team',
-            'workspace_id': member.workspace.id,
+            'workspace_id': str(member.workspace.id),
+            'workspace_slug': member.workspace.slug or str(member.workspace.id),
             'workspace_name': member.workspace.name,
             'created_at': member.joined_at,
             'updated_at': member.joined_at,
             'relevance_score': 1.0,
             'url': '/team'
         })
-    
+
     return results
 
 def search_quicklinks(search_key, workspaces, workspace_filter=None):
@@ -198,7 +202,8 @@ def search_quicklinks(search_key, workspaces, workspace_filter=None):
             'title': ql.title,
             'content': ql.url,
             'type': 'quicklink',
-            'workspace_id': ql.workspace.id if ql.workspace else None,
+            'workspace_id': str(ql.workspace.id) if ql.workspace else None,
+            'workspace_slug': (ql.workspace.slug or str(ql.workspace.id)) if ql.workspace else None,
             'workspace_name': ql.workspace.name if ql.workspace else '',
             'created_at': ql.created_at,
             'updated_at': ql.updated_at,
@@ -211,14 +216,15 @@ def search_quicklinks(search_key, workspaces, workspace_filter=None):
             'title': sq.title,
             'content': sq.description or sq.url,
             'type': 'quicklink',
-            'workspace_id': sq.workspace.id,
+            'workspace_id': str(sq.workspace.id),
+            'workspace_slug': sq.workspace.slug or str(sq.workspace.id),
             'workspace_name': sq.workspace.name,
             'created_at': sq.created_at,
             'updated_at': sq.updated_at,
             'relevance_score': 1.0,
             'url': '/quick-links'
         })
-    
+
     return results
 
 def search_logs(search_key, workspaces, workspace_filter=None):
@@ -240,14 +246,15 @@ def search_logs(search_key, workspaces, workspace_filter=None):
             'title': log.action,
             'content': log.description[:200] + '...' if len(log.description) > 200 else log.description,
             'type': 'log',
-            'workspace_id': log.workspace.id,
+            'workspace_id': str(log.workspace.id),
+            'workspace_slug': log.workspace.slug or str(log.workspace.id),
             'workspace_name': log.workspace.name,
             'created_at': log.created_at,
             'updated_at': log.created_at,
             'relevance_score': 0.8,
             'url': '/activity-logs'
         })
-    
+
     return results
 
 def search_files(search_key, workspaces, workspace_filter=None):
@@ -273,7 +280,8 @@ def search_files(search_key, workspaces, workspace_filter=None):
             'title': folder.name,
             'content': 'Folder',
             'type': 'file',
-            'workspace_id': folder.workspace.id,
+            'workspace_id': str(folder.workspace.id),
+            'workspace_slug': folder.workspace.slug or str(folder.workspace.id),
             'workspace_name': folder.workspace.name,
             'created_at': folder.created_at,
             'updated_at': folder.updated_at,
@@ -286,7 +294,8 @@ def search_files(search_key, workspaces, workspace_filter=None):
             'title': f.file_name,
             'content': f'{f.file_type} file — {f.file_size} bytes',
             'type': 'file',
-            'workspace_id': f.workspace.id if f.workspace else None,
+            'workspace_id': str(f.workspace.id) if f.workspace else None,
+            'workspace_slug': (f.workspace.slug or str(f.workspace.id)) if f.workspace else None,
             'workspace_name': f.workspace.name if f.workspace else '',
             'created_at': f.uploaded_at,
             'updated_at': f.uploaded_at,
@@ -316,14 +325,15 @@ def search_notifications(search_key, workspaces, workspace_filter=None):
             'title': notif.action,
             'content': notif.description or '',
             'type': 'notification',
-            'workspace_id': notif.workspace.id if notif.workspace else None,
+            'workspace_id': str(notif.workspace.id) if notif.workspace else None,
+            'workspace_slug': (notif.workspace.slug or str(notif.workspace.id)) if notif.workspace else None,
             'workspace_name': notif.workspace.name if notif.workspace else '',
             'created_at': notif.created_at,
             'updated_at': notif.created_at,
             'relevance_score': 0.7,
             'url': '/notifications'
         })
-    
+
     return results
 
 @extend_schema(

@@ -9,7 +9,7 @@ from django.utils.html import strip_tags
 
 def _task_url(task):
     slug = getattr(task.workspace, 'slug', None) or str(task.workspace.id)
-    return f"{settings.FRONTEND_URL}/{slug}/tasks/{task.id}"
+    return f"{settings.FRONTEND_URL}/{slug}/tasks/{task.ticket_number}"
 
 
 def _fmt_date(d):
