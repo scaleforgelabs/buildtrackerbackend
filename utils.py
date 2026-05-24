@@ -1,4 +1,3 @@
-from django.utils.html import escape
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from rest_framework.permissions import BasePermission
@@ -45,13 +44,12 @@ def handle_view_exception(e, source, workspace=None):
 def sanitize_input(value, max_length=None):
     if not value:
         return ''
-    
+
     cleaned = bleach.clean(str(value).strip(), tags=[], strip=True)
-    cleaned = escape(cleaned)
-    
+
     if max_length:
         cleaned = cleaned[:max_length]
-    
+
     return cleaned
 
 def validate_username(username):
