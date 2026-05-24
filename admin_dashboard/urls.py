@@ -17,4 +17,8 @@ urlpatterns = [
     # Sales CRM
     path('leads/', views.admin_leads_list_view, name='admin-leads-list'),
     path('leads/<int:lead_id>/', views.admin_lead_update_view, name='admin-lead-update'),
+    # Lead Contacts
+    path('leads/<int:lead_id>/contacts/', views.admin_lead_contacts_list_view, name='admin-lead-contacts-list'),
+    path('leads/<int:lead_id>/contacts/add/', views.admin_lead_contact_create_view, name='admin-lead-contact-create'),
+    path('leads/<int:lead_id>/contacts/<int:contact_id>/', views.admin_lead_contact_detail_view, name='admin-lead-contact-detail'),
 ]

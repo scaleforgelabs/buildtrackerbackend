@@ -8,7 +8,7 @@ from django.utils import timezone
 from datetime import timedelta
 from drf_spectacular.utils import extend_schema
 from permissions import IsAdmin, IsSuperAdmin
-from .models import ContentPost, SalesLead
+from .models import ContentPost, SalesLead, LeadContact
 
 User = get_user_model()
 
@@ -593,4 +593,108 @@ async def admin_lead_update_view(request, lead_id):
                 setattr(lead, field, val)
         lead.save()
         return Response(_lead_row(lead))
+    return await _sync()
+
+
+# ─── lead contacts ────────────────────────────────────────────────────────────
+
+def _contact_row(c):
+    return {
+        'id': c.id,
+        'lead_id': c.lead_id,
+        'name': c.name,
+        'title': c.title,
+        'linkedin_url': c.linkedin_url,
+        'phone': c.phone,
+        'email': c.email,
+        'twitter_handle': c.twitter_handle,
+        'outreach_status': c.outreach_status,
+        'date_contacted': c.date_contacted.isoformat() if c.date_contacted else None,
+        'follow_up_date': c.follow_up_date.isoformat() if c.follow_up_date else None,
+        'notes': c.notes,
+        'updated_at': c.updated_at.isoformat(),
+    }
+
+
+@extend_schema(tags=["Admin Dashboard"], summary="List contacts for a lead")
+@api_view(['GET'])
+@permission_classes([IsAdmin])
+async def admin_lead_contacts_list_view(request, lead_id):
+    @sync_to_async
+    def _sync():
+        if not SalesLead.objects.filter(id=lead_id).exists():
+            return Response({'error': 'Lead not found'}, status=status.HTTP_404_NOT_FOUND)
+        contacts = LeadContact.objects.filter(lead_id=lead_id).order_by('name')
+        return Response({'contacts': [_contact_row(c) for c in contacts]})
+    return await _sync()
+
+
+@extend_schema(tags=["Admin Dashboard"], summary="Add a contact to a lead")
+@api_view(['POST'])
+@permission_classes([IsAdmin])
+async def admin_lead_contact_create_view(request, lead_id):
+    @sync_to_async
+    def _sync():
+        try:
+            lead = SalesLead.objects.get(id=lead_id)
+        except SalesLead.DoesNotExist:
+            return Response({'error': 'Lead not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        name = request.data.get('name', '').strip()
+        if not name:
+            return Response({'error': 'name is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from datetime import date, datetime
+        def _parse_date(val):
+            if not val:
+                return None
+            if isinstance(val, date):
+                return val
+            try:
+                return datetime.strptime(str(val), '%Y-%m-%d').date()
+            except Exception:
+                return None
+
+        contact = LeadContact.objects.create(
+            lead=lead,
+            name=name,
+            title=request.data.get('title', '').strip(),
+            linkedin_url=request.data.get('linkedin_url', '').strip(),
+            phone=request.data.get('phone', '').strip(),
+            email=request.data.get('email', '').strip(),
+            twitter_handle=request.data.get('twitter_handle', '').strip(),
+            outreach_status=request.data.get('outreach_status', 'not_contacted'),
+            date_contacted=_parse_date(request.data.get('date_contacted')),
+            follow_up_date=_parse_date(request.data.get('follow_up_date')),
+            notes=request.data.get('notes', '').strip(),
+        )
+        return Response(_contact_row(contact), status=status.HTTP_201_CREATED)
+    return await _sync()
+
+
+@extend_schema(tags=["Admin Dashboard"], summary="Update a lead contact")
+@api_view(['PATCH', 'DELETE'])
+@permission_classes([IsAdmin])
+async def admin_lead_contact_detail_view(request, lead_id, contact_id):
+    @sync_to_async
+    def _sync():
+        try:
+            contact = LeadContact.objects.get(id=contact_id, lead_id=lead_id)
+        except LeadContact.DoesNotExist:
+            return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == 'DELETE':
+            contact.delete()
+            return Response({'message': 'Contact deleted'})
+
+        allowed = ('name', 'title', 'linkedin_url', 'phone', 'email', 'twitter_handle',
+                   'outreach_status', 'date_contacted', 'follow_up_date', 'notes')
+        for field in allowed:
+            if field in request.data:
+                val = request.data[field]
+                if field.endswith('_date') and not val:
+                    val = None
+                setattr(contact, field, val)
+        contact.save()
+        return Response(_contact_row(contact))
     return await _sync()

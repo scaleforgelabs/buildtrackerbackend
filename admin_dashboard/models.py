@@ -88,3 +88,34 @@ class SalesLead(models.Model):
 
     def __str__(self):
         return f"[{self.priority}] {self.company}"
+
+
+class LeadContact(models.Model):
+    OUTREACH_STATUS_CHOICES = [
+        ('not_contacted', 'Not Contacted'),
+        ('dm_sent', 'DM Sent'),
+        ('replied', 'Replied'),
+        ('call_booked', 'Call Booked'),
+        ('not_interested', 'Not Interested'),
+        ('no_response', 'No Response'),
+    ]
+
+    lead = models.ForeignKey(SalesLead, on_delete=models.CASCADE, related_name='contacts')
+    name = models.CharField(max_length=200)
+    title = models.CharField(max_length=200, blank=True)
+    linkedin_url = models.TextField(blank=True)
+    phone = models.CharField(max_length=50, blank=True)
+    email = models.EmailField(blank=True)
+    twitter_handle = models.CharField(max_length=100, blank=True)
+    outreach_status = models.CharField(max_length=20, choices=OUTREACH_STATUS_CHOICES, default='not_contacted')
+    date_contacted = models.DateField(null=True, blank=True)
+    follow_up_date = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} @ {self.lead.company}"
