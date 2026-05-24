@@ -53,25 +53,25 @@ def rate_limit(requests_per_minute=60):
                     user_id = str(request.user.id)
                 else:
                     user_id = request.META.get('REMOTE_ADDR', 'unknown')
-                
+
                 module_path = f"{view_func.__module__}.{view_func.__name__}"
                 cache_key = f"rate_limit:{module_path}:{user_id}"
-                
+
                 try:
-                    # Atomic incr-first pattern: avoids TOCTOU race condition
-                    # where concurrent requests could both pass the check before either increments.
                     count = cache.incr(cache_key)
                 except ValueError:
-                    # Key doesn't exist yet — initialize it
                     cache.set(cache_key, 1, 60)
                     count = 1
-                
+                except Exception:
+                    # Cache unavailable — fail open so users are not locked out
+                    return await view_func(request, *args, **kwargs)
+
                 if count > requests_per_minute:
                     return get_error_response(
                         'RATE_LIMIT_EXCEEDED',
                         f'Rate limit of {requests_per_minute} requests per minute exceeded'
                     )
-                
+
                 return await view_func(request, *args, **kwargs)
             return async_wrapper
 
@@ -82,24 +82,25 @@ def rate_limit(requests_per_minute=60):
                     user_id = str(request.user.id)
                 else:
                     user_id = request.META.get('REMOTE_ADDR', 'unknown')
-                
+
                 module_path = f"{view_func.__module__}.{view_func.__name__}"
                 cache_key = f"rate_limit:{module_path}:{user_id}"
-                
+
                 try:
-                    # Atomic incr-first pattern: avoids TOCTOU race condition
                     count = cache.incr(cache_key)
                 except ValueError:
-                    # Key doesn't exist yet — initialize it
                     cache.set(cache_key, 1, 60)
                     count = 1
-                
+                except Exception:
+                    # Cache unavailable — fail open so users are not locked out
+                    return view_func(request, *args, **kwargs)
+
                 if count > requests_per_minute:
                     return get_error_response(
                         'RATE_LIMIT_EXCEEDED',
                         f'Rate limit of {requests_per_minute} requests per minute exceeded'
                     )
-                
+
                 return view_func(request, *args, **kwargs)
             return sync_wrapper
 
