@@ -57,6 +57,7 @@ class TaskCommentSerializer(serializers.ModelSerializer):
             if request:
                 profile_picture_url = request.build_absolute_uri(profile_picture_url)
         return {
+            'id': str(obj.user.id),
             'first_name': getattr(obj.user, 'first_name', ''),
             'last_name': getattr(obj.user, 'last_name', ''),
             'email': getattr(obj.user, 'email', ''),

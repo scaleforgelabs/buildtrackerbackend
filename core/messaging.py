@@ -6,24 +6,28 @@ import re
 
 logger = logging.getLogger(__name__)
 
-# Per-type accent colours and chip labels
+BRAND_BLUE        = '#4372E9'
+BRAND_BLUE_BG     = '#EFF4FF'
+BRAND_BLUE_BORDER = '#C7D7FD'
+
+# Per-type chip labels — all use brand blue except hard semantic red (danger) actions
 EMAIL_TYPE_META = {
-    'task_assigned':    {'color': '#4372E9', 'bg': '#EFF4FF', 'border': '#C7D7FD', 'chip': 'Task Assigned'},
-    'status_update':    {'color': '#F97316', 'bg': '#FFF7ED', 'border': '#FED7AA', 'chip': 'Status Update'},
-    'comment':          {'color': '#10B981', 'bg': '#ECFDF5', 'border': '#A7F3D0', 'chip': 'New Comment'},
-    'blocker':          {'color': '#EF4444', 'bg': '#FEF2F2', 'border': '#FECACA', 'chip': 'Blocker Reported'},
-    'reminder':         {'color': '#F59E0B', 'bg': '#FFFBEB', 'border': '#FDE68A', 'chip': 'Due Date Reminder'},
-    'daily_summary':    {'color': '#6366F1', 'bg': '#EEF2FF', 'border': '#C7D2FE', 'chip': 'Daily Summary'},
-    'wiki_create':      {'color': '#8B5CF6', 'bg': '#F5F3FF', 'border': '#DDD6FE', 'chip': 'Wiki — New Document'},
-    'wiki_update':      {'color': '#0EA5E9', 'bg': '#F0F9FF', 'border': '#BAE6FD', 'chip': 'Wiki — Document Updated'},
-    'wiki_delete':      {'color': '#EF4444', 'bg': '#FEF2F2', 'border': '#FECACA', 'chip': 'Wiki — Document Deleted'},
-    'invitation':       {'color': '#4372E9', 'bg': '#EFF4FF', 'border': '#C7D7FD', 'chip': 'You\'re Invited'},
-    'member_joined':    {'color': '#10B981', 'bg': '#ECFDF5', 'border': '#A7F3D0', 'chip': 'Team Update'},
-    'deletion':         {'color': '#EF4444', 'bg': '#FEF2F2', 'border': '#FECACA', 'chip': 'Task Deleted'},
-    'general_update':   {'color': '#F97316', 'bg': '#FFF7ED', 'border': '#FED7AA', 'chip': 'Task Updated'},
-    'usage_alert':      {'color': '#F59E0B', 'bg': '#FFFBEB', 'border': '#FDE68A', 'chip': 'Usage Alert'},
+    'task_assigned':    {'color': BRAND_BLUE,  'bg': BRAND_BLUE_BG,  'border': BRAND_BLUE_BORDER, 'chip': 'Task Assigned'},
+    'status_update':    {'color': BRAND_BLUE,  'bg': BRAND_BLUE_BG,  'border': BRAND_BLUE_BORDER, 'chip': 'Status Update'},
+    'comment':          {'color': BRAND_BLUE,  'bg': BRAND_BLUE_BG,  'border': BRAND_BLUE_BORDER, 'chip': 'New Comment'},
+    'blocker':          {'color': '#EF4444',   'bg': '#FEF2F2',      'border': '#FECACA',          'chip': 'Blocker Reported'},
+    'reminder':         {'color': BRAND_BLUE,  'bg': BRAND_BLUE_BG,  'border': BRAND_BLUE_BORDER, 'chip': 'Due Date Reminder'},
+    'daily_summary':    {'color': BRAND_BLUE,  'bg': BRAND_BLUE_BG,  'border': BRAND_BLUE_BORDER, 'chip': 'Daily Summary'},
+    'wiki_create':      {'color': BRAND_BLUE,  'bg': BRAND_BLUE_BG,  'border': BRAND_BLUE_BORDER, 'chip': 'Wiki — New Document'},
+    'wiki_update':      {'color': BRAND_BLUE,  'bg': BRAND_BLUE_BG,  'border': BRAND_BLUE_BORDER, 'chip': 'Wiki — Updated'},
+    'wiki_delete':      {'color': '#EF4444',   'bg': '#FEF2F2',      'border': '#FECACA',          'chip': 'Wiki — Deleted'},
+    'invitation':       {'color': BRAND_BLUE,  'bg': BRAND_BLUE_BG,  'border': BRAND_BLUE_BORDER, 'chip': "You're Invited"},
+    'member_joined':    {'color': BRAND_BLUE,  'bg': BRAND_BLUE_BG,  'border': BRAND_BLUE_BORDER, 'chip': 'Team Update'},
+    'deletion':         {'color': '#EF4444',   'bg': '#FEF2F2',      'border': '#FECACA',          'chip': 'Task Deleted'},
+    'general_update':   {'color': BRAND_BLUE,  'bg': BRAND_BLUE_BG,  'border': BRAND_BLUE_BORDER, 'chip': 'Task Updated'},
+    'usage_alert':      {'color': BRAND_BLUE,  'bg': BRAND_BLUE_BG,  'border': BRAND_BLUE_BORDER, 'chip': 'Usage Alert'},
 }
-_DEFAULT_META = {'color': '#4372E9', 'bg': '#EFF4FF', 'border': '#C7D7FD', 'chip': None}
+_DEFAULT_META = {'color': BRAND_BLUE, 'bg': BRAND_BLUE_BG, 'border': BRAND_BLUE_BORDER, 'chip': None}
 
 
 def send_beautiful_email(subject, message, recipient_list, fail_silently=False, extra_context=None):
@@ -84,7 +88,7 @@ def send_beautiful_email(subject, message, recipient_list, fail_silently=False, 
         email = EmailMultiAlternatives(
             subject=subject,
             body=message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
+            from_email='BuildTracker <noreply@buildtrackerapp.com>',
             to=recipient_list,
         )
         email.attach_alternative(html_content, 'text/html')
