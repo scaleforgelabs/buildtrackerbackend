@@ -698,3 +698,54 @@ async def admin_lead_contact_detail_view(request, lead_id, contact_id):
         contact.save()
         return Response(_contact_row(contact))
     return await _sync()
+
+
+@extend_schema(tags=["Admin Dashboard"], summary="Send email to a specific lead contact")
+@api_view(['POST'])
+@permission_classes([IsAdmin])
+async def admin_send_contact_email_view(request, lead_id, contact_id):
+    @sync_to_async
+    def _sync():
+        try:
+            contact = LeadContact.objects.select_related('lead').get(id=contact_id, lead_id=lead_id)
+        except LeadContact.DoesNotExist:
+            return Response({'error': 'Contact not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not contact.email:
+            return Response({'error': 'This contact has no email address'}, status=status.HTTP_400_BAD_REQUEST)
+
+        subject = request.data.get('subject', '').strip()
+        message = request.data.get('message', '').strip()
+        action_url = request.data.get('action_url', '').strip()
+        action_text = request.data.get('action_text', 'Open BuildTracker').strip()
+
+        if not subject or not message:
+            return Response({'error': 'subject and message are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from core.tasks import send_email_task
+        send_email_task.delay(
+            subject=subject,
+            message=message,
+            recipient_list=[contact.email],
+            fail_silently=False,
+            extra_context={
+                'email_type': 'general_update',
+                'chip_label': 'BuildTracker',
+                'action_url': action_url or None,
+                'action_text': action_text,
+                'recipient_name': contact.name,
+            },
+        )
+
+        # Mark contact as dm_sent / replied if still not_contacted
+        if contact.outreach_status == 'not_contacted':
+            from datetime import date
+            contact.outreach_status = 'dm_sent'
+            contact.date_contacted = date.today()
+            contact.save(update_fields=['outreach_status', 'date_contacted'])
+
+        return Response({
+            'message': f'Email sent to {contact.name} ({contact.email})',
+            'contact': _contact_row(contact),
+        })
+    return await _sync()
