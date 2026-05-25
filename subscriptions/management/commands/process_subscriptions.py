@@ -99,7 +99,7 @@ class Command(BaseCommand):
             is_in_grace_period=False,
             cancel_at_period_end=False,
             next_plan_type__isnull=True, # No pending changes
-            plan_type__in=['pro', 'business', 'enterprise'] # Only paid plans
+            plan_type__in=['starter', 'premium', 'custom', 'pro', 'business', 'enterprise'] # Only paid plans
         )
 
         for sub in due_subs:
@@ -200,7 +200,8 @@ class Command(BaseCommand):
         # Usually from standard end_date to keep cycles aligned, but if gap is large, maybe FROM NOW.
         # Let's extend from expected end_date to keep cycle anchor, unless it's way in past.
         # For simplicity, extend from NOW if it was expired, or add 30 days.
-        sub.end_date = timezone.now() + datetime.timedelta(days=30)
+        days_to_add = 365 if sub.billing_cycle == 'yearly' else 30
+        sub.end_date = timezone.now() + datetime.timedelta(days=days_to_add)
         sub.next_billing_date = sub.end_date
         sub.grace_period_end = sub.end_date + datetime.timedelta(days=3)
         sub.save()
