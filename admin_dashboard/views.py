@@ -319,8 +319,14 @@ async def admin_subscriptions_view(request):
         if search:
             qs = qs.filter(organization__name__icontains=search)
 
+        now = timezone.now()
         rows = []
         for sub in qs.select_related('organization__owner').order_by('-created_at')[offset:offset + page_size]:
+            nbd = sub.next_billing_date
+            days_until_due = None
+            if nbd:
+                delta = (nbd - now).total_seconds() / 86400
+                days_until_due = round(delta, 1)
             rows.append({
                 'id': str(sub.id),
                 'organization': sub.organization.name if sub.organization else '—',
@@ -333,6 +339,8 @@ async def admin_subscriptions_view(request):
                 'start_date': sub.start_date.isoformat(),
                 'end_date': sub.end_date.isoformat() if sub.end_date else None,
                 'cancel_at_period_end': sub.cancel_at_period_end,
+                'next_billing_date': nbd.isoformat() if nbd else None,
+                'days_until_due': days_until_due,
             })
 
         return Response({
@@ -1127,9 +1135,10 @@ async def admin_set_subscription_plan_view(request, subscription_id):
         except Subscription.DoesNotExist:
             return Response({'error': 'Subscription not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        plan_type    = request.data.get('plan_type')
-        sub_status   = request.data.get('status')
-        billing_cycle = request.data.get('billing_cycle')
+        plan_type         = request.data.get('plan_type')
+        sub_status        = request.data.get('status')
+        billing_cycle     = request.data.get('billing_cycle')
+        next_billing_date = request.data.get('next_billing_date')  # ISO 8601 string or null
 
         valid_plans   = ['free', 'starter', 'premium', 'custom', 'pro', 'business', 'enterprise']
         valid_statuses = ['active', 'inactive', 'cancelled', 'past_due']
@@ -1142,7 +1151,7 @@ async def admin_set_subscription_plan_view(request, subscription_id):
         if billing_cycle and billing_cycle not in valid_cycles:
             return Response({'error': 'Invalid billing_cycle'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not any([plan_type, sub_status, billing_cycle]):
+        if not any([plan_type, sub_status, billing_cycle, next_billing_date is not None]):
             return Response({'error': 'Nothing to update'}, status=status.HTTP_400_BAD_REQUEST)
 
         if plan_type:
@@ -1160,14 +1169,26 @@ async def admin_set_subscription_plan_view(request, subscription_id):
         if billing_cycle:
             sub.billing_cycle = billing_cycle
 
+        if next_billing_date is not None:
+            if next_billing_date == '' or next_billing_date is None:
+                sub.next_billing_date = None
+            else:
+                try:
+                    from dateutil.parser import parse as parse_date
+                    sub.next_billing_date = parse_date(next_billing_date)
+                except Exception:
+                    return Response({'error': 'Invalid next_billing_date format. Use ISO 8601.'}, status=status.HTTP_400_BAD_REQUEST)
+
         sub.save()
 
+        nbd = sub.next_billing_date
         return Response({
             'message': f"Subscription for {sub.organization.name} updated.",
             'id': str(sub.id),
             'plan_type': sub.plan_type,
             'status': sub.status,
             'billing_cycle': sub.billing_cycle,
+            'next_billing_date': nbd.isoformat() if nbd else None,
         })
     return await _sync()
 
