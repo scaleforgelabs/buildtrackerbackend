@@ -39,6 +39,7 @@ class CustomUser(AbstractUser):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active', db_index=True)
     is_verified = models.BooleanField(default=False)
     last_active_workspace = models.UUIDField(null=True, blank=True)
+    scheduled_for_deletion_at = models.DateTimeField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 

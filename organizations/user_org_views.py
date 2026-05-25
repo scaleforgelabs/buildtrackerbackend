@@ -313,24 +313,100 @@ def update_user_organization(request, id):
 def delete_user_organization(request, id):
     """
     DELETE /api/organizations/:id
-    Deletes user account and all owned workspaces
+    Schedules user account for deletion in 30 days (soft-delete).
+    The account can be restored by signing in within the grace period.
+    After 30 days, the account and all data are permanently removed.
     """
     user = get_object_or_404(User, id=id)
-    
-    # Only allow users to delete their own account
+
     if user != request.user:
         return Response(
-            {'error': 'You can only delete your own organization'}, 
+            {'error': 'You can only delete your own organization'},
             status=status.HTTP_403_FORBIDDEN
         )
-    
-    # Delete all workspaces owned by this user (cascade deletes members, tasks, files, etc.)
-    Workspace.objects.filter(owner=user).delete()
-    
-    # Delete the user account
-    user.delete()
-    
-    return Response({'message': 'Organization deleted successfully'})
+
+    deletion_date = timezone.now() + timezone.timedelta(days=30)
+    user.scheduled_for_deletion_at = deletion_date
+    user.is_active = False
+    user.save(update_fields=['scheduled_for_deletion_at', 'is_active', 'updated_at'])
+
+    # Cancel any active subscriptions
+    try:
+        from subscriptions.models import Subscription
+        Subscription.objects.filter(
+            organization__owner=user, status__in=['active', 'past_due']
+        ).update(status='cancelled', cancel_at_period_end=False)
+    except Exception:
+        pass
+
+    # Send email notification
+    try:
+        from core.tasks import send_email_task
+        full_name = f"{user.first_name} {user.last_name}".strip() or user.email
+        deletion_date_str = deletion_date.strftime('%B %d, %Y')
+        send_email_task.delay(
+            subject='Your BuildTracker account is scheduled for deletion',
+            message=(
+                f"Hi {full_name},\n\n"
+                f"Your account has been scheduled for permanent deletion on {deletion_date_str}.\n\n"
+                f"During this 30-day period, you can restore your account at any time by simply signing in again.\n\n"
+                f"After {deletion_date_str}, your account and all associated data will be permanently removed and cannot be recovered.\n\n"
+                f"If you did not request this, please sign in immediately to restore your account.\n\n"
+                f"The BuildTracker Team"
+            ),
+            recipient_list=[user.email],
+            fail_silently=True,
+        )
+    except Exception:
+        pass
+
+    return Response({
+        'message': 'Account scheduled for deletion',
+        'scheduled_for_deletion_at': deletion_date.isoformat(),
+        'restore_by_signing_in': True,
+    })
+
+
+@extend_schema(
+    tags=["Organizations"],
+    summary="Cancel Account Deletion",
+    description="POST: Cancel a scheduled account deletion by restoring the account",
+    responses={
+        200: {'description': 'Deletion cancelled, account restored'},
+        400: {'description': 'Account is not scheduled for deletion'},
+        403: {'description': 'Permission denied'},
+    }
+)
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def cancel_account_deletion(request, id):
+    """
+    POST /api/organizations/:id/cancel-deletion/
+    Cancels a scheduled account deletion. The account must have been
+    scheduled for deletion and the user must authenticate (already done
+    via the token) within the 30-day grace period.
+    """
+    # We allow the owner to call this even if is_active=False only from
+    # restore-on-login path. Here the user is already authenticated.
+    user = get_object_or_404(User, id=id)
+
+    if user != request.user:
+        return Response(
+            {'error': 'You can only cancel your own deletion'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    if not user.scheduled_for_deletion_at:
+        return Response(
+            {'error': 'Account is not scheduled for deletion'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    user.scheduled_for_deletion_at = None
+    user.is_active = True
+    user.save(update_fields=['scheduled_for_deletion_at', 'is_active', 'updated_at'])
+
+    return Response({'message': 'Account deletion cancelled. Your account has been restored.'})
 
 @extend_schema(
     tags=["Organizations"],

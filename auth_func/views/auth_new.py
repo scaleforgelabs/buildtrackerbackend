@@ -474,6 +474,7 @@ async def login_view(request):
             return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
         try:
+            # Use get() with no is_active filter so we can find soft-deleted accounts
             user = User.objects.get(email=email)
 
             # Check if user has verified their email
@@ -482,6 +483,33 @@ async def login_view(request):
                     {'error': 'Please verify your email first. Check your inbox for the OTP.', 'requires_verification': True, 'email': email},
                     status=status.HTTP_403_FORBIDDEN
                 )
+
+            # Restore soft-deleted account if within the 30-day grace period
+            from django.utils import timezone as tz
+            if user.scheduled_for_deletion_at and not user.is_active:
+                if tz.now() <= user.scheduled_for_deletion_at:
+                    # Verify password manually since authenticate() skips inactive users
+                    if user.check_password(password):
+                        user.scheduled_for_deletion_at = None
+                        user.is_active = True
+                        user.save(update_fields=['scheduled_for_deletion_at', 'is_active', 'updated_at'])
+                        refresh = RefreshToken.for_user(user)
+                        return Response({
+                            'user': {
+                                'id': str(user.id),
+                                'email': user.email,
+                                'first_name': user.first_name,
+                                'last_name': user.last_name,
+                                'avatar': user.avatar.url if user.avatar else None,
+                                'last_active_workspace': user.last_active_workspace,
+                                'scheduled_for_deletion_at': None,
+                            },
+                            'token': str(refresh.access_token),
+                            'refresh_token': str(refresh),
+                            'account_restored': True,
+                        })
+                # Grace period expired — account is permanently gone
+                return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
             user = authenticate(username=user.username, password=password)
             if user and user.is_active:
@@ -494,7 +522,8 @@ async def login_view(request):
                         'first_name': user.first_name,
                         'last_name': user.last_name,
                         'avatar': user.avatar.url if user.avatar else None,
-                        'last_active_workspace': user.last_active_workspace
+                        'last_active_workspace': user.last_active_workspace,
+                        'scheduled_for_deletion_at': user.scheduled_for_deletion_at.isoformat() if user.scheduled_for_deletion_at else None,
                     },
                     'token': str(refresh.access_token),
                     'refresh_token': str(refresh)
@@ -976,6 +1005,7 @@ async def me_view(request):
                 'avatar': user.avatar.url if user.avatar else None,
                 'last_active_workspace': user.last_active_workspace,
                 'platform_role': user.platform_role,
+                'scheduled_for_deletion_at': user.scheduled_for_deletion_at.isoformat() if user.scheduled_for_deletion_at else None,
             }
         }
 

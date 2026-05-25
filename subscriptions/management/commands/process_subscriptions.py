@@ -16,6 +16,7 @@ class Command(BaseCommand):
         self.process_retries()
         self.send_grace_period_reminder()
         self.notify_expiring_custom()
+        self.purge_expired_deleted_accounts()
         self.stdout.write("Subscription processing complete.")
 
     def process_expirations_and_changes(self):
@@ -360,3 +361,35 @@ class Command(BaseCommand):
                 recipient_list=[sub.billing_email or sub.organization.owner.email],
                 fail_silently=True,
             )
+
+    def purge_expired_deleted_accounts(self):
+        """Permanently delete accounts whose 30-day grace period has expired."""
+        from django.contrib.auth import get_user_model
+        from workspaces.models import Workspace
+
+        User = get_user_model()
+        now = timezone.now()
+
+        expired_users = User.objects.filter(
+            is_active=False,
+            scheduled_for_deletion_at__isnull=False,
+            scheduled_for_deletion_at__lte=now,
+        )
+
+        count = expired_users.count()
+        if count == 0:
+            return
+
+        self.stdout.write(f"Permanently deleting {count} expired account(s)...")
+
+        for user in expired_users:
+            try:
+                # Hard-delete all workspaces (cascades to members, tasks, files, etc.)
+                Workspace.objects.filter(owner=user).delete()
+                email = user.email
+                user.delete()
+                self.stdout.write(f"  Deleted account: {email}")
+            except Exception as e:
+                self.stderr.write(f"  Failed to delete {user.email}: {e}")
+
+        self.stdout.write(f"Purged {count} expired account(s).")
