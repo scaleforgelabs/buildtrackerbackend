@@ -14,7 +14,8 @@ class Command(BaseCommand):
         self.process_expirations_and_changes()
         self.process_due_subscriptions()
         self.process_retries()
-        self.send_grace_period_reminder()  # Send second reminder emails
+        self.send_grace_period_reminder()
+        self.notify_expiring_custom()
         self.stdout.write("Subscription processing complete.")
 
     def process_expirations_and_changes(self):
@@ -277,6 +278,70 @@ class Command(BaseCommand):
              sub.organization.owner.save()
 
         self.send_notification(sub, "Subscription Cancelled", f"We could not process your payment for {old_plan}. You have been downgraded to the Free plan.")
+
+    def notify_expiring_custom(self):
+        """
+        Email the admin when a custom plan is 30, 14, or 7 days from expiry.
+        Custom plans are manually invoiced so they need a heads-up to generate
+        a renewal payment link before the subscription lapses.
+        """
+        from django.conf import settings as djsettings
+        from core.messaging import send_beautiful_email
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        admin_email = getattr(djsettings, 'ADMIN_EMAIL', None) or getattr(djsettings, 'DEFAULT_FROM_EMAIL', None)
+
+        for days in [30, 14, 7]:
+            window_start = now + datetime.timedelta(days=days - 1)
+            window_end   = now + datetime.timedelta(days=days)
+
+            expiring = Subscription.objects.filter(
+                plan_type='custom',
+                status='active',
+                end_date__gte=window_start,
+                end_date__lt=window_end,
+            ).select_related('organization', 'organization__owner')
+
+            for sub in expiring:
+                expiry_str = sub.end_date.strftime('%B %d, %Y') if sub.end_date else 'unknown'
+                org_name   = sub.organization.name if sub.organization else 'Unknown Org'
+                owner_email = (
+                    sub.organization.owner.email
+                    if sub.organization and sub.organization.owner
+                    else None
+                )
+
+                self.stdout.write(
+                    f"[Custom expiry] {org_name} expires in {days} day(s) ({expiry_str})"
+                )
+
+                # Notify the organisation owner
+                self.send_notification(
+                    sub,
+                    f"Your BuildTracker Custom Plan expires in {days} day(s)",
+                    (
+                        f"Your Custom plan for {org_name} is set to expire on {expiry_str}. "
+                        f"Please contact us to renew your subscription and avoid any interruption."
+                    ),
+                )
+
+                # Also notify the platform admin so they can generate a renewal link
+                if admin_email:
+                    try:
+                        send_beautiful_email(
+                            subject=f"[Action Required] {org_name} custom plan expires in {days} day(s)",
+                            message=(
+                                f"{org_name}'s custom subscription expires on {expiry_str} "
+                                f"({days} day(s) from now).\n\n"
+                                f"Owner: {owner_email or 'unknown'}\n\n"
+                                f"Go to the Revenue page in the admin dashboard to generate "
+                                f"a renewal payment link."
+                            ),
+                            recipient_list=[admin_email],
+                            fail_silently=True,
+                        )
+                    except Exception:
+                        pass
 
     def send_notification(self, sub, subject, message):
         """Send dual notification to organization owner"""

@@ -931,6 +931,27 @@ async def admin_revenue_view(request):
             for r in trend_rows
         ]
 
+        # Custom subscriptions expiring in the next 30 days
+        expiring_custom = []
+        for sub in (
+            Subscription.objects.select_related('organization', 'organization__owner')
+            .filter(
+                plan_type='custom',
+                status='active',
+                end_date__lte=now + timedelta(days=30),
+                end_date__gt=now,
+            )
+            .order_by('end_date')
+        ):
+            days_left = (sub.end_date - now).days if sub.end_date else None
+            expiring_custom.append({
+                'subscription_id': str(sub.id),
+                'organization':    sub.organization.name if sub.organization else '—',
+                'owner_email':     sub.organization.owner.email if sub.organization and sub.organization.owner else None,
+                'end_date':        sub.end_date.isoformat() if sub.end_date else None,
+                'days_left':       days_left,
+            })
+
         # Recent payments
         recent = []
         for p in successful.select_related('organization').order_by('-transaction_date')[:15]:
@@ -955,6 +976,7 @@ async def admin_revenue_view(request):
             'by_plan': by_plan,
             'monthly_trend': monthly_trend,
             'recent_payments': recent,
+            'expiring_custom': expiring_custom,
         })
     return await _sync()
 
