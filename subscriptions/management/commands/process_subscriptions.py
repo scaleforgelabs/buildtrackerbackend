@@ -99,7 +99,7 @@ class Command(BaseCommand):
             is_in_grace_period=False,
             cancel_at_period_end=False,
             next_plan_type__isnull=True, # No pending changes
-            plan_type__in=['starter', 'premium', 'custom', 'pro', 'business', 'enterprise'] # Only paid plans
+            plan_type__in=['starter', 'premium', 'pro', 'business', 'enterprise'] # Only auto-billing paid plans (custom is manual/invoice)
         )
 
         for sub in due_subs:

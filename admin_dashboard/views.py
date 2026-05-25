@@ -320,10 +320,12 @@ async def admin_subscriptions_view(request):
             qs = qs.filter(organization__name__icontains=search)
 
         rows = []
-        for sub in qs.order_by('-created_at')[offset:offset + page_size]:
+        for sub in qs.select_related('organization__owner').order_by('-created_at')[offset:offset + page_size]:
             rows.append({
                 'id': str(sub.id),
                 'organization': sub.organization.name if sub.organization else '—',
+                'organization_id': str(sub.organization.id) if sub.organization else None,
+                'organization_email': sub.organization.owner.email if sub.organization and sub.organization.owner else None,
                 'plan_type': sub.plan_type,
                 'billing_cycle': sub.billing_cycle,
                 'status': sub.status,
@@ -856,4 +858,114 @@ async def admin_pricing_update_view(request, plan_type):
             'updated_at':        pricing.updated_at.isoformat(),
             'updated_by':        pricing.updated_by.email if pricing.updated_by else None,
         })
+    return await _sync()
+
+
+# ─── set subscription plan (admin override) ───────────────────────────────────
+
+@extend_schema(tags=["Admin Dashboard"], summary="Manually set a subscription plan for an organisation")
+@api_view(['POST'])
+@permission_classes([IsAdmin])
+async def admin_set_subscription_plan_view(request, subscription_id):
+    @sync_to_async
+    def _sync():
+        from subscriptions.models import Subscription
+
+        try:
+            sub = Subscription.objects.select_related(
+                'organization', 'organization__owner'
+            ).get(id=subscription_id)
+        except Subscription.DoesNotExist:
+            return Response({'error': 'Subscription not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        plan_type    = request.data.get('plan_type')
+        sub_status   = request.data.get('status')
+        billing_cycle = request.data.get('billing_cycle')
+
+        valid_plans   = ['free', 'starter', 'premium', 'custom', 'pro', 'business', 'enterprise']
+        valid_statuses = ['active', 'inactive', 'cancelled', 'past_due']
+        valid_cycles  = ['monthly', 'yearly']
+
+        if plan_type and plan_type not in valid_plans:
+            return Response({'error': 'Invalid plan_type'}, status=status.HTTP_400_BAD_REQUEST)
+        if sub_status and sub_status not in valid_statuses:
+            return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
+        if billing_cycle and billing_cycle not in valid_cycles:
+            return Response({'error': 'Invalid billing_cycle'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not any([plan_type, sub_status, billing_cycle]):
+            return Response({'error': 'Nothing to update'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if plan_type:
+            sub.plan_type = plan_type
+            # Keep org and owner in sync
+            sub.organization.plan_type = plan_type
+            sub.organization.save(update_fields=['plan_type'])
+            if sub.organization.owner:
+                sub.organization.owner.plan_type = plan_type
+                sub.organization.owner.save(update_fields=['plan_type'])
+
+        if sub_status:
+            sub.status = sub_status
+
+        if billing_cycle:
+            sub.billing_cycle = billing_cycle
+
+        sub.save()
+
+        return Response({
+            'message': f"Subscription for {sub.organization.name} updated.",
+            'id': str(sub.id),
+            'plan_type': sub.plan_type,
+            'status': sub.status,
+            'billing_cycle': sub.billing_cycle,
+        })
+    return await _sync()
+
+
+# ─── send email to an individual ─────────────────────────────────────────────
+
+@extend_schema(tags=["Admin Dashboard"], summary="Send a direct email to any individual")
+@api_view(['POST'])
+@permission_classes([IsAdmin])
+async def admin_send_user_email_view(request):
+    @sync_to_async
+    def _sync():
+        from core.tasks import send_email_task
+
+        email       = request.data.get('email', '').strip()
+        subject     = request.data.get('subject', '').strip()
+        message     = request.data.get('message', '').strip()
+        action_url  = request.data.get('action_url', '').strip()
+        action_text = request.data.get('action_text', 'Open BuildTracker').strip()
+
+        if not email or not subject or not message:
+            return Response(
+                {'error': 'email, subject, and message are required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Personalise greeting if recipient is a known user
+        recipient_name = None
+        try:
+            u = User.objects.get(email=email)
+            recipient_name = f"{u.first_name} {u.last_name}".strip() or u.email
+        except User.DoesNotExist:
+            pass
+
+        send_email_task.delay(
+            subject=subject,
+            message=message,
+            recipient_list=[email],
+            fail_silently=False,
+            extra_context={
+                'email_type': 'general_update',
+                'chip_label': 'BuildTracker',
+                'action_url': action_url or None,
+                'action_text': action_text,
+                'recipient_name': recipient_name,
+            },
+        )
+
+        return Response({'message': f'Email sent to {email}'})
     return await _sync()
