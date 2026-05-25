@@ -18,38 +18,38 @@ Annual discount: pay monthly rate × 12 at a discounted monthly rate
 # ─── Plan limits ────────────────────────────────────────────────────────────
 PLAN_LIMITS = {
     'free': {
-        'max_members': 2,
+        'max_users': 2,
         'max_workspaces': 1,
         'max_storage_mb': 500,       # 500 MB
     },
     'starter': {
-        'max_members': 10,
+        'max_users': 10,
         'max_workspaces': 3,
         'max_storage_mb': 5120,      # 5 GB
     },
     'premium': {
-        'max_members': 25,
+        'max_users': 25,
         'max_workspaces': 5,
         'max_storage_mb': 20480,     # 20 GB
     },
     'custom': {
-        'max_members': 999999,       # Unlimited
+        'max_users': 999999,         # Unlimited
         'max_workspaces': 999999,    # Unlimited
         'max_storage_mb': 999999999, # Unlimited
     },
     # Legacy aliases — kept for backward compatibility with existing DB records
     'pro': {
-        'max_members': 10,
+        'max_users': 10,
         'max_workspaces': 3,
         'max_storage_mb': 5120,
     },
     'business': {
-        'max_members': 25,
+        'max_users': 25,
         'max_workspaces': 5,
         'max_storage_mb': 20480,
     },
     'enterprise': {
-        'max_members': 999999,
+        'max_users': 999999,
         'max_workspaces': 999999,
         'max_storage_mb': 999999999,
     },

@@ -386,11 +386,13 @@ async def admin_newsletter_view(request):
 
         qs = User.objects.filter(status='active', is_verified=True)
         if audience == 'pro':
-            qs = qs.filter(plan_type='pro')
+            qs = qs.filter(plan_type__in=['pro', 'starter'])
         elif audience == 'free':
             qs = qs.filter(plan_type='free')
-        elif audience == 'enterprise':
-            qs = qs.filter(plan_type='enterprise')
+        elif audience in ('enterprise', 'premium'):
+            qs = qs.filter(plan_type__in=['enterprise', 'business', 'premium'])
+        elif audience == 'custom':
+            qs = qs.filter(plan_type='custom')
         elif audience == 'unverified':
             qs = User.objects.filter(is_verified=False)
 
@@ -1215,4 +1217,102 @@ async def admin_send_user_email_view(request):
         )
 
         return Response({'message': f'Email sent to {email}'})
+    return await _sync()
+
+
+# ─── grant / override a plan for a user by email ─────────────────────────────
+
+@extend_schema(
+    tags=["Admin Dashboard"],
+    summary="Grant or override a plan for a user by email",
+    request={
+        'application/json': {
+            'type': 'object',
+            'properties': {
+                'email': {'type': 'string'},
+                'plan_type': {'type': 'string', 'enum': ['free', 'starter', 'premium', 'custom']},
+                'billing_cycle': {'type': 'string', 'enum': ['monthly', 'yearly']},
+                'notify': {'type': 'boolean', 'description': 'Send email notification to user'},
+            },
+            'required': ['email', 'plan_type']
+        }
+    },
+    responses={200: {'description': 'Plan granted'}, 404: {'description': 'User not found'}}
+)
+@api_view(['POST'])
+@permission_classes([IsAdmin])
+async def admin_grant_plan_view(request):
+    @sync_to_async
+    def _sync():
+        from subscriptions.models import Subscription
+        from organizations.models import Organization
+
+        email        = request.data.get('email', '').strip().lower()
+        plan_type    = request.data.get('plan_type', '').strip()
+        billing_cycle = request.data.get('billing_cycle', 'monthly').strip()
+        notify       = bool(request.data.get('notify', False))
+
+        valid_plans  = ['free', 'starter', 'premium', 'custom']
+        valid_cycles = ['monthly', 'yearly']
+
+        if not email or not plan_type:
+            return Response({'error': 'email and plan_type are required'}, status=status.HTTP_400_BAD_REQUEST)
+        if plan_type not in valid_plans:
+            return Response({'error': f'Invalid plan_type. Must be one of: {valid_plans}'}, status=status.HTTP_400_BAD_REQUEST)
+        if billing_cycle not in valid_cycles:
+            return Response({'error': 'billing_cycle must be monthly or yearly'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            target = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({'error': f'No user found with email {email}'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Update user plan
+        target.plan_type = plan_type
+        target.save(update_fields=['plan_type'])
+
+        # Update org plan
+        org = Organization.objects.filter(owner=target).first()
+        if org:
+            org.plan_type = plan_type
+            org.save(update_fields=['plan_type'])
+
+        # Update or create the subscription
+        days = 365 if billing_cycle == 'yearly' else 30
+        sub, created = Subscription.objects.update_or_create(
+            organization=org,
+            defaults={
+                'plan_type': plan_type,
+                'status': 'active',
+                'billing_cycle': billing_cycle,
+                'start_date': timezone.now(),
+                'end_date': timezone.now() + timedelta(days=days) if plan_type != 'free' else None,
+            }
+        ) if org else (None, False)
+
+        if notify:
+            from core.tasks import send_email_task
+            plan_label = plan_type.capitalize()
+            send_email_task.delay(
+                subject=f'Your BuildTracker plan has been updated to {plan_label}',
+                message=f'An administrator has updated your BuildTracker plan to {plan_label}. You now have access to all {plan_label} features.',
+                recipient_list=[email],
+                fail_silently=True,
+                extra_context={
+                    'email_type': 'general_update',
+                    'chip_label': 'Plan Update',
+                    'action_url': None,
+                    'action_text': 'Open BuildTracker',
+                    'recipient_name': f"{target.first_name} {target.last_name}".strip() or target.email,
+                },
+            )
+
+        return Response({
+            'message': f"Plan for {email} set to {plan_type} ({billing_cycle}).",
+            'user_id': str(target.id),
+            'email': target.email,
+            'plan_type': plan_type,
+            'billing_cycle': billing_cycle,
+            'notified': notify,
+        })
     return await _sync()

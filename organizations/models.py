@@ -8,10 +8,14 @@ User = get_user_model()
 
 class Organization(models.Model):
     PLAN_CHOICES = [
-        ('free', 'Starter Organization'),
-        ('pro', 'Pro Organization'),
-        ('business', 'Business Organization'),
-        ('enterprise', 'Enterprise Organization'),
+        ('free', 'Free'),
+        ('starter', 'Starter'),
+        ('premium', 'Premium'),
+        ('custom', 'Custom'),
+        # Legacy names kept for existing DB rows
+        ('pro', 'Pro (Legacy)'),
+        ('business', 'Business (Legacy)'),
+        ('enterprise', 'Enterprise (Legacy)'),
     ]
     
     STATUS_CHOICES = [
@@ -45,12 +49,12 @@ class Organization(models.Model):
     @property
     def effective_plan_type(self):
         if self.owner.is_staff or self.owner.is_superuser:
-            return 'business'
+            return 'custom'
         return self.plan_type
-    
+
     def get_plan_limits(self):
         if self.owner.is_staff or self.owner.is_superuser:
-            return PLAN_LIMITS['business']
+            return PLAN_LIMITS['custom']
         return PLAN_LIMITS.get(self.plan_type, PLAN_LIMITS['free'])
     
     def can_add_user(self):

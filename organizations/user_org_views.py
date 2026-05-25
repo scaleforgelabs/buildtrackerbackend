@@ -21,7 +21,7 @@ from subscriptions.constants import PLAN_LIMITS
 def get_plan_limits(plan_type, user=None):
     """Get plan limits for a given plan type, upgraded if user is staff"""
     if user and (user.is_staff or user.is_superuser):
-        return PLAN_LIMITS['business']
+        return PLAN_LIMITS['custom']
     return PLAN_LIMITS.get(plan_type, PLAN_LIMITS['free'])
 
 def calculate_user_storage_and_files(user):

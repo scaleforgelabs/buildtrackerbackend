@@ -13,6 +13,7 @@ from drf_spectacular.utils import extend_schema
 import secrets
 import string
 from .models import Organization, OrganizationMembership, OrganizationUsage, OrganizationInvitation
+from subscriptions.constants import PLAN_DETAILS
 from .serializers import (
     OrganizationSerializer, OrganizationUpdateSerializer,
     OrganizationUsageSerializer
@@ -395,65 +396,7 @@ async def check_limits(request, id):
 async def get_plans(request):
     @sync_to_async
     def _sync_logic():
-        plans = [
-            {
-                'type': 'free',
-                'name': 'Starter Organization',
-                'price_naira': 0,
-                'price_usd': 0,
-                'limits': {
-                    'max_users': 5,
-                    'max_workspaces': 2,
-                    'max_storage_mb': 2048
-                },
-                'features': [
-                    'Up to 5 users',
-                    'Up to 2 workspaces',
-                    '2GB storage',
-                    'Basic support'
-                ]
-            },
-            {
-                'type': 'pro',
-                'name': 'Pro Organization',
-                'price_naira': 6000,
-                'price_usd': 6,
-                'limits': {
-                    'max_users': 10,
-                    'max_workspaces': 10,
-                    'max_storage_mb': 10240
-                },
-                'features': [
-                    'Up to 10 users',
-                    'Up to 10 workspaces',
-                    '10GB storage',
-                    'Priority support',
-                    'Advanced analytics'
-                ]
-            },
-            {
-                'type': 'business',
-                'name': 'Business Organization',
-                'price_naira': 18000,
-                'price_usd': 18,
-                'limits': {
-                    'max_users': 30,
-                    'max_workspaces': 30,
-                    'max_storage_mb': 102400
-                },
-                'features': [
-                    'Up to 30 users',
-                    'Up to 30 workspaces',
-                    '100GB storage',
-                    '24/7 support',
-                    'Advanced analytics',
-                    'Custom integrations',
-                    'SSO support'
-                ]
-            }
-        ]
-
-        return Response({'plans': plans})
+        return Response({'plans': PLAN_DETAILS})
 
     return await _sync_logic()
 

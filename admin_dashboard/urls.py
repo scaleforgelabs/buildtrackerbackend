@@ -12,6 +12,7 @@ urlpatterns = [
     path('subscriptions/', views.admin_subscriptions_view, name='admin-subscriptions'),
     path('subscriptions/<uuid:subscription_id>/set-plan/', views.admin_set_subscription_plan_view, name='admin-set-subscription-plan'),
     path('users/send-email/', views.admin_send_user_email_view, name='admin-send-user-email'),
+    path('users/grant-plan/', views.admin_grant_plan_view, name='admin-grant-plan'),
     path('newsletter/', views.admin_newsletter_view, name='admin-newsletter'),
     # Content Hub
     path('content/', views.admin_content_list_view, name='admin-content-list'),
