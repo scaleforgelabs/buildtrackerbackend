@@ -749,3 +749,111 @@ async def admin_send_contact_email_view(request, lead_id, contact_id):
             'contact': _contact_row(contact),
         })
     return await _sync()
+
+
+# ─── Plan Pricing ─────────────────────────────────────────────────────────────
+
+@extend_schema(tags=["Admin Dashboard"], summary="List current plan prices")
+@api_view(['GET'])
+@permission_classes([IsAdmin])
+async def admin_pricing_list_view(request):
+    """
+    Return current prices for all active plans from the PlanPricing table.
+    Any admin can view pricing.
+    """
+    @sync_to_async
+    def _sync():
+        from subscriptions.models import PlanPricing
+
+        rows = PlanPricing.objects.select_related('updated_by').filter(is_active=True)
+        data = []
+        for p in rows:
+            data.append({
+                'plan_type':         p.plan_type,
+                'plan_label':        p.get_plan_type_display(),
+                'price_ngn_monthly': float(p.price_ngn_monthly),
+                'price_ngn_yearly':  float(p.price_ngn_yearly),
+                'price_usd_monthly': float(p.price_usd_monthly),
+                'price_usd_yearly':  float(p.price_usd_yearly),
+                'is_active':         p.is_active,
+                'updated_at':        p.updated_at.isoformat() if p.updated_at else None,
+                'updated_by':        p.updated_by.email if p.updated_by else None,
+            })
+        return Response({'pricing': data})
+    return await _sync()
+
+
+@extend_schema(tags=["Admin Dashboard"], summary="Update a plan's prices (requires password)")
+@api_view(['PUT'])
+@permission_classes([IsSuperAdmin])
+async def admin_pricing_update_view(request, plan_type):
+    """
+    Update the prices for a single plan.
+
+    Body:
+        password         — current admin password (required for confirmation)
+        price_ngn_monthly
+        price_ngn_yearly   (per-month rate when billed yearly)
+        price_usd_monthly
+        price_usd_yearly   (per-month rate when billed yearly)
+
+    Only super_admins can update prices; a correct password is required every time.
+    The update is logged to the PlanPricing.updated_by field.
+    """
+    @sync_to_async
+    def _sync():
+        from django.contrib.auth.hashers import check_password
+        from subscriptions.models import PlanPricing
+
+        # 1. Verify the password
+        password = request.data.get('password', '')
+        if not password:
+            return Response({'error': 'Your current password is required to change pricing.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not check_password(password, request.user.password):
+            return Response({'error': 'Incorrect password. Price update was not saved.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # 2. Validate plan type
+        valid_plans = ['starter', 'premium', 'custom']
+        if plan_type not in valid_plans:
+            return Response({'error': f'Unknown plan type. Must be one of: {valid_plans}'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 3. Validate the numeric fields
+        fields = ['price_ngn_monthly', 'price_ngn_yearly', 'price_usd_monthly', 'price_usd_yearly']
+        values = {}
+        for field in fields:
+            raw = request.data.get(field)
+            if raw is None:
+                return Response({'error': f'{field} is required'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                val = float(raw)
+                if val < 0:
+                    raise ValueError
+                values[field] = val
+            except (ValueError, TypeError):
+                return Response({'error': f'{field} must be a non-negative number'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 4. Update or create the record
+        pricing, created = PlanPricing.objects.update_or_create(
+            plan_type=plan_type,
+            defaults={
+                'price_ngn_monthly': values['price_ngn_monthly'],
+                'price_ngn_yearly':  values['price_ngn_yearly'],
+                'price_usd_monthly': values['price_usd_monthly'],
+                'price_usd_yearly':  values['price_usd_yearly'],
+                'is_active':         True,
+                'updated_by':        request.user,
+            }
+        )
+
+        return Response({
+            'message': f"{'Created' if created else 'Updated'} {plan_type} pricing successfully.",
+            'plan_type':         pricing.plan_type,
+            'price_ngn_monthly': float(pricing.price_ngn_monthly),
+            'price_ngn_yearly':  float(pricing.price_ngn_yearly),
+            'price_usd_monthly': float(pricing.price_usd_monthly),
+            'price_usd_yearly':  float(pricing.price_usd_yearly),
+            'updated_at':        pricing.updated_at.isoformat(),
+            'updated_by':        pricing.updated_by.email if pricing.updated_by else None,
+        })
+    return await _sync()

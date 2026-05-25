@@ -21,9 +21,14 @@ class SubscriptionSerializer(serializers.ModelSerializer):
 
 class InitiateSubscriptionSerializer(serializers.Serializer):
     plan_type = serializers.ChoiceField(choices=[
-        ('pro', 'Pro Plan'),
-        ('business', 'Business Plan'),
-        ('enterprise', 'Enterprise Plan')
+        # Current plan names
+        ('starter',    'Starter Plan'),
+        ('premium',    'Premium Plan'),
+        ('custom',     'Custom Plan'),
+        # Legacy aliases (kept for backward-compat with existing integrations)
+        ('pro',        'Pro Plan (Legacy)'),
+        ('business',   'Business Plan (Legacy)'),
+        ('enterprise', 'Enterprise Plan (Legacy)'),
     ])
     payment_provider = serializers.ChoiceField(choices=[
         ('paystack', 'Paystack'),
@@ -32,6 +37,7 @@ class InitiateSubscriptionSerializer(serializers.Serializer):
     currency = serializers.ChoiceField(choices=[('NGN', 'NGN'), ('USD', 'USD')], default='NGN')
     billing_cycle = serializers.ChoiceField(choices=[('monthly', 'Monthly'), ('yearly', 'Yearly')], default='monthly')
     callback_url = serializers.URLField(required=False)
+    coupon_code = serializers.CharField(required=False, allow_blank=True, help_text="Optional coupon code for a discount")
 
 class PaymentHistorySerializer(serializers.ModelSerializer):
     class Meta:

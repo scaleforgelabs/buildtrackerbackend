@@ -5,12 +5,14 @@ from rest_framework.decorators import permission_classes
 from rest_framework.response import Response
 from adrf import generics, views
 from django.conf import settings
+from django.db import models
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
+import math
 import uuid
 import requests
 
-from .models import Subscription, PaymentHistory, PaymentMethod
+from .models import Subscription, PaymentHistory, PaymentMethod, Coupon
 from organizations.models import Organization, OrganizationMembership
 from .serializers import PlanSerializer, InitiateSubscriptionSerializer, VerifyPaymentSerializer
 from .utils import verify_paystack_transaction, verify_flutterwave_transaction, verify_flutterwave_transaction_by_reference, get_plan_price
@@ -19,12 +21,39 @@ from .utils import verify_paystack_transaction, verify_flutterwave_transaction, 
 
 @extend_schema(tags=["Subscriptions"])
 class PlanListView(generics.GenericAPIView):
-    permission_classes = [permissions.IsAuthenticated]
+    """
+    Returns the list of available plans with their current prices.
+
+    Prices are sourced from the PlanPricing DB table (admin-editable) and fall back
+    to the hardcoded constants in constants.py when no DB record exists.
+
+    Public — no authentication required so the marketing pricing page can call this.
+    """
+    permission_classes = [permissions.AllowAny]
     serializer_class = PlanSerializer
 
     async def get(self, request):
-        from .constants import PLAN_DETAILS
-        return Response({'plans': PLAN_DETAILS})
+        @sync_to_async
+        def _sync_logic():
+            import copy
+            from .constants import PLAN_DETAILS
+            from .models import PlanPricing
+
+            plans = copy.deepcopy(PLAN_DETAILS)
+
+            # Build a quick lookup of DB-stored prices, keyed by plan_type
+            db_prices = {p.plan_type: p for p in PlanPricing.objects.filter(is_active=True)}
+
+            for plan in plans:
+                db = db_prices.get(plan['type'])
+                if db:
+                    plan['price_naira_monthly'] = float(db.price_ngn_monthly)
+                    plan['price_naira_yearly']  = float(db.price_ngn_yearly)
+                    plan['price_usd_monthly']   = float(db.price_usd_monthly)
+                    plan['price_usd_yearly']    = float(db.price_usd_yearly)
+
+            return Response({'plans': plans})
+        return await _sync_logic()
 
 @extend_schema(tags=["Subscriptions"])
 class SubscriptionDetailView(views.APIView):
@@ -169,16 +198,32 @@ class InitiateSubscriptionView(generics.GenericAPIView):
             currency = serializer.validated_data.get('currency', 'NGN')
             billing_cycle = serializer.validated_data.get('billing_cycle', 'monthly')
             callback_url = serializer.validated_data.get('callback_url', settings.FRONTEND_URL + '/billing/callback')
+            coupon_code = serializer.validated_data.get('coupon_code', '').strip().upper()
 
             try:
                 Subscription.objects.get(organization=organization)
             except Subscription.DoesNotExist:
                 pass
-            
+
             amount = get_plan_price(plan_type, currency, billing_cycle)
-        
+
             if amount <= 0:
                  return Response({'error': 'Invalid plan or currency'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Apply coupon discount if provided
+            applied_coupon = None
+            original_amount = amount
+            if coupon_code:
+                try:
+                    coupon = Coupon.objects.get(code=coupon_code, is_active=True)
+                    is_valid, msg = coupon.is_valid(plan_type)
+                    if is_valid:
+                        amount, _ = coupon.apply_discount(amount, currency)
+                        applied_coupon = coupon
+                    else:
+                        return Response({'error': f'Coupon invalid: {msg}'}, status=status.HTTP_400_BAD_REQUEST)
+                except Coupon.DoesNotExist:
+                    return Response({'error': 'Invalid coupon code'}, status=status.HTTP_400_BAD_REQUEST)
 
         
             email = request.user.email
@@ -256,6 +301,13 @@ class InitiateSubscriptionView(generics.GenericAPIView):
             except Exception as e:
                 return Response({'error': f'Payment initialization error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+            payment_metadata = {
+                'initiated_by': request.user.email,
+            }
+            if applied_coupon:
+                payment_metadata['coupon_code'] = applied_coupon.code
+                payment_metadata['original_amount'] = str(original_amount)
+
             PaymentHistory.objects.create(
                 organization=organization,
                 amount=amount,
@@ -265,7 +317,7 @@ class InitiateSubscriptionView(generics.GenericAPIView):
                 status='pending',
                 plan_type=plan_type,
                 billing_cycle=billing_cycle,
-                metadata={'initiated_by': request.user.email}
+                metadata=payment_metadata
             )
 
             return Response({
@@ -346,6 +398,13 @@ async def verify_payment(request):
 
             payment.status = 'success'
             payment.save()
+
+            # Increment coupon used_count if one was applied to this payment
+            coupon_code_used = payment.metadata.get('coupon_code')
+            if coupon_code_used:
+                Coupon.objects.filter(code=coupon_code_used).update(
+                    used_count=models.F('used_count') + 1
+                )
 
             organization = payment.organization
 
@@ -604,3 +663,200 @@ class DowngradeSubscriptionView(views.APIView):
             except Subscription.DoesNotExist:
                 return Response({'error': 'No active subscription found'}, status=status.HTTP_404_NOT_FOUND)
         return await _sync_logic()
+
+
+# ─── Coupon Validation ────────────────────────────────────────────────────────
+
+@extend_schema(tags=["Subscriptions"])
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+async def validate_coupon(request):
+    """
+    Validate a coupon code and return the discounted price.
+
+    Public endpoint — called from the checkout page before payment is initiated.
+
+    Request body:
+        code          — coupon code to validate (required)
+        plan_type     — plan being purchased: starter | premium | custom (optional)
+        currency      — NGN | USD (default: NGN)
+        billing_cycle — monthly | yearly (default: monthly)
+
+    Response (always 200):
+        is_valid          — bool
+        message           — human-readable result
+        discount_type     — percentage | fixed_ngn | fixed_usd (only if valid)
+        discount_value    — raw discount value (only if valid)
+        original_amount   — base price for the plan/cycle in the given currency
+        discounted_amount — price after discount applied
+        savings           — amount saved
+        currency          — currency used
+    """
+    @sync_to_async
+    def _sync_logic():
+        code = request.data.get('code', '').strip().upper()
+        plan_type = request.data.get('plan_type', '').strip()
+        currency = request.data.get('currency', 'NGN').upper()
+        billing_cycle = request.data.get('billing_cycle', 'monthly').lower()
+
+        if not code:
+            return Response({'error': 'Coupon code is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            coupon = Coupon.objects.get(code=code)
+        except Coupon.DoesNotExist:
+            return Response({'is_valid': False, 'message': 'Invalid coupon code'})
+
+        is_valid, message = coupon.is_valid(plan_type or None)
+
+        original_amount = 0.0
+        discounted_amount = 0.0
+        savings = 0.0
+
+        if plan_type:
+            original_amount = get_plan_price(plan_type, currency, billing_cycle)
+            if is_valid and original_amount > 0:
+                discounted_amount, savings = coupon.apply_discount(original_amount, currency)
+            else:
+                discounted_amount = original_amount
+
+        return Response({
+            'is_valid':          is_valid,
+            'message':           message,
+            'discount_type':     coupon.discount_type if is_valid else None,
+            'discount_value':    float(coupon.discount_value) if is_valid else None,
+            'original_amount':   original_amount,
+            'discounted_amount': discounted_amount,
+            'savings':           savings,
+            'currency':          currency,
+        })
+    return await _sync_logic()
+
+
+# ─── Custom Pricing Calculator ────────────────────────────────────────────────
+
+@extend_schema(tags=["Subscriptions"])
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+async def calculate_custom_price(request):
+    """
+    Calculate a bespoke (Custom/Enterprise) plan price from usage requirements.
+
+    Based on §4 of the BuildTracker Pricing Guide v1.0.
+
+    Formula:
+        subtotal         = baseline + extra_workspace_cost + extra_member_cost + extra_storage_cost
+        with_support     = subtotal × support_multiplier
+        raw_price        = with_support × (1 + negotiation_buffer)
+        floor_price      = CEIL(raw_price, 100)  — nearest ₦100 (or $1 for USD)
+        quoted_price     = max(floor_price, minimum_quote)
+
+    Request body:
+        extra_workspaces — workspaces beyond the Premium limit of 5  (default 0)
+        extra_members    — members beyond the Premium limit of 25     (default 0)
+        extra_storage_gb — storage GB beyond the Premium limit of 20 GB (default 0)
+        support_level    — standard | priority | dedicated            (default: standard)
+        currency         — NGN | USD                                  (default: NGN)
+
+    Response:
+        line_items            — itemised breakdown [{label, amount}]
+        subtotal              — sum before support multiplier
+        support_level         — chosen support tier
+        support_multiplier    — multiplier applied (1.00 / 1.15 / 1.25)
+        subtotal_with_support — after support multiplier
+        negotiation_buffer    — buffer fraction (0.25)
+        raw_price             — price before rounding/minimum
+        floor_price           — final quoted price
+        minimum_quote         — minimum allowed quote for Custom plan
+        is_minimum_applied    — True if floor_price was clamped up to minimum_quote
+        currency              — currency used
+    """
+    @sync_to_async
+    def _sync_logic():
+        from .constants import CUSTOM_PRICING
+
+        try:
+            extra_workspaces = max(0, int(request.data.get('extra_workspaces', 0)))
+            extra_members    = max(0, int(request.data.get('extra_members', 0)))
+            extra_storage_gb = max(0.0, float(request.data.get('extra_storage_gb', 0)))
+        except (ValueError, TypeError):
+            return Response(
+                {'error': 'extra_workspaces, extra_members, and extra_storage_gb must be numbers'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        support_level = request.data.get('support_level', 'standard')
+        currency      = request.data.get('currency', 'NGN').upper()
+
+        if support_level not in CUSTOM_PRICING['support_multiplier']:
+            choices = list(CUSTOM_PRICING['support_multiplier'].keys())
+            return Response({'error': f'support_level must be one of: {choices}'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if currency not in ('NGN', 'USD'):
+            return Response({'error': 'currency must be NGN or USD'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 1. Baseline — starts at Premium plan price
+        baseline = CUSTOM_PRICING['baseline'][currency]
+
+        # 2. Per-unit add-ons
+        workspace_cost = extra_workspaces * CUSTOM_PRICING['extra_workspace'][currency]
+        member_cost    = extra_members    * CUSTOM_PRICING['extra_member'][currency]
+        # Storage billed in 10 GB blocks, ceil to nearest block
+        storage_blocks = math.ceil(extra_storage_gb / 10) if extra_storage_gb > 0 else 0
+        storage_cost   = storage_blocks * CUSTOM_PRICING['extra_storage_per_10gb'][currency]
+
+        subtotal = baseline + workspace_cost + member_cost + storage_cost
+
+        # 3. Support tier multiplier
+        support_mult          = CUSTOM_PRICING['support_multiplier'][support_level]
+        subtotal_with_support = subtotal * support_mult
+
+        # 4. Negotiation buffer (+25%)
+        buffer    = CUSTOM_PRICING['negotiation_buffer']
+        raw_price = subtotal_with_support * (1 + buffer)
+
+        # 5. Round up: nearest ₦100 for NGN, nearest $1 for USD
+        if currency == 'NGN':
+            floor_price = math.ceil(raw_price / 100) * 100
+        else:
+            floor_price = math.ceil(raw_price)
+
+        # 6. Enforce minimum quote — never quote below 3× Premium
+        minimum_quote      = CUSTOM_PRICING['minimum_quote_ngn'] if currency == 'NGN' else CUSTOM_PRICING['minimum_quote_usd']
+        is_minimum_applied = floor_price < minimum_quote
+        floor_price        = max(floor_price, minimum_quote)
+
+        # Build itemised line items (only show add-ons that are > 0)
+        line_items = [
+            {'label': 'Premium baseline (Custom plan starts here)', 'amount': baseline},
+        ]
+        if extra_workspaces > 0:
+            line_items.append({
+                'label':  f'{extra_workspaces} extra workspace(s) × {CUSTOM_PRICING["extra_workspace"][currency]} {currency}',
+                'amount': workspace_cost,
+            })
+        if extra_members > 0:
+            line_items.append({
+                'label':  f'{extra_members} extra member(s) × {CUSTOM_PRICING["extra_member"][currency]} {currency}',
+                'amount': member_cost,
+            })
+        if extra_storage_gb > 0:
+            line_items.append({
+                'label':  f'{storage_blocks} × 10 GB storage block(s) ({extra_storage_gb:.0f} GB total)',
+                'amount': storage_cost,
+            })
+
+        return Response({
+            'line_items':             line_items,
+            'subtotal':               subtotal,
+            'support_level':          support_level,
+            'support_multiplier':     support_mult,
+            'subtotal_with_support':  subtotal_with_support,
+            'negotiation_buffer':     buffer,
+            'raw_price':              round(raw_price, 2),
+            'floor_price':            floor_price,
+            'minimum_quote':          minimum_quote,
+            'is_minimum_applied':     is_minimum_applied,
+            'currency':               currency,
+        })
+    return await _sync_logic()
