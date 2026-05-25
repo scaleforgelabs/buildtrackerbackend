@@ -6,6 +6,7 @@ Seeded values match the BuildTracker Pricing Guide v1.0 (2025):
   Premium — ₦24,900/mo · ₦19,900/mo yearly · $15/mo · $12/mo yearly
   Custom  — ₦95,000/mo · ₦75,000/mo yearly · $60/mo · $45/mo yearly  (floor prices)
 """
+from django.conf import settings
 from django.db import migrations, models
 import django.db.models.deletion
 
@@ -48,6 +49,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('subscriptions', '0010_coupon_new_plan_types'),
+        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
@@ -82,7 +84,7 @@ class Migration(migrations.Migration):
                     null=True, blank=True,
                     on_delete=django.db.models.deletion.SET_NULL,
                     related_name='pricing_changes',
-                    to='auth.user',
+                    to=settings.AUTH_USER_MODEL,
                     help_text='The admin who last modified this pricing record',
                 )),
             ],

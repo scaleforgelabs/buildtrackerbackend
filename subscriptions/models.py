@@ -235,7 +235,7 @@ class PlanPricing(models.Model):
     is_active         = models.BooleanField(default=True)
     updated_at        = models.DateTimeField(auto_now=True)
     updated_by        = models.ForeignKey(
-        'auth.User', null=True, blank=True, on_delete=models.SET_NULL,
+        'auth_func.CustomUser', null=True, blank=True, on_delete=models.SET_NULL,
         related_name='pricing_changes',
         help_text="The admin who last modified this pricing record"
     )
