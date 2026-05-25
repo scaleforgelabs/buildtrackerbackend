@@ -1,12 +1,8 @@
 from celery import shared_task
 from django.core.cache import cache
 import time
-from core.messaging import send_beautiful_email
-from django.conf import settings
-from twilio.rest import Client
-from twilio.base.exceptions import TwilioRestException
+from core.messaging import send_beautiful_email, send_whatsapp_message
 from auth_func.models import CustomUser
-import os
 import logging
 
 logger = logging.getLogger(__name__)
@@ -65,43 +61,19 @@ def send_dual_notification_task(user_id, subject, message, fail_silently=False, 
         if not fail_silently:
             raise
 
-    account_sid = os.getenv('TWILIO_ACCOUNT_SID')
-    auth_token = os.getenv('TWILIO_AUTH_TOKEN')
-    from_number = os.getenv('TWILIO_PHONE_NUMBER')
-
-    if not all([account_sid, auth_token, from_number]):
-        logger.warning("Twilio credentials missing in environment variables. SMS skipped.")
-        return
-
+    # ── WhatsApp notification ────────────────────────────────────────────────
     if not user.phone:
-        logger.info(f"User {user.email} has no phone number. SMS skipped.")
+        logger.info(f"User {user.email} has no phone number. WhatsApp skipped.")
         return
 
-    try:
-        client = Client(account_sid, auth_token)
-        sms_body = f"{subject}: {message}" if subject else message
-        
-        phone = user.phone.strip()
-        if phone.startswith('+'):
-            to_number = phone
-        elif phone.startswith('0'):
-            to_number = f"+234{phone.lstrip('0')}"
-        elif len(phone) > 10 and not phone.startswith('+'):
-            to_number = f"+{phone}"
-        else:
-            to_number = phone
-            
-        client.messages.create(
-            body=sms_body,
-            from_=from_number,
-            to=to_number
-        )
-        logger.info(f"SMS sent successfully to {to_number}")
-    except TwilioRestException as e:
-        logger.error(f"Twilio error sending SMS to {user.phone}: {str(e)}")
-        if not fail_silently:
-            raise
-    except Exception as e:
-        logger.error(f"Unexpected error sending SMS to {user.phone}: {str(e)}")
-        if not fail_silently:
-            raise
+    ctx = extra_context or {}
+    user_name  = ctx.get('recipient_name') or user.first_name or user.email.split('@')[0]
+    action_url = ctx.get('action_url')
+
+    send_whatsapp_message(
+        phone=user.phone,
+        user_name=user_name,
+        body=subject,          # Subject is concise and descriptive — ideal for WhatsApp
+        action_url=action_url, # Deep link to the task (None for non-task notifications)
+        fail_silently=True,
+    )

@@ -433,6 +433,15 @@ DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL')
 # Frontend URL for password reset links
 FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000')
 
+# ── WhatsApp Business Cloud API (Meta) ────────────────────────────────────────
+# Get these from: Meta Developer Console → Your App → WhatsApp → API Setup
+WHATSAPP_ACCESS_TOKEN   = config('WHATSAPP_ACCESS_TOKEN', default='')
+WHATSAPP_PHONE_NUMBER_ID = config('WHATSAPP_PHONE_NUMBER_ID', default='')
+WHATSAPP_API_VERSION    = config('WHATSAPP_API_VERSION', default='v19.0')
+# Template names — must match exactly what you created in Meta Business Manager
+WHATSAPP_TEMPLATE_TASK  = config('WHATSAPP_TEMPLATE_TASK', default='buildtracker_task_notification')
+WHATSAPP_TEMPLATE_PLAIN = config('WHATSAPP_TEMPLATE_PLAIN', default='buildtracker_notification')
+
 # OAuth App Configurations
 SOCIALACCOUNT_ADAPTER = 'allauth.socialaccount.adapter.DefaultSocialAccountAdapter'
 ACCOUNT_ADAPTER = 'allauth.account.adapter.DefaultAccountAdapter'

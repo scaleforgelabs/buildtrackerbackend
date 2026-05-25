@@ -1,8 +1,8 @@
 import logging
+import re
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.conf import settings
-import re
 
 logger = logging.getLogger(__name__)
 
@@ -100,9 +100,127 @@ def send_beautiful_email(subject, message, recipient_list, fail_silently=False, 
         return 0
 
 
+def send_whatsapp_message(phone, user_name, body, action_url=None, fail_silently=True):
+    """
+    Send a WhatsApp notification via Meta WhatsApp Business Cloud API.
+
+    Template setup (create once in Meta Business Manager):
+
+    Template 1 — for task notifications (has "Open Task" button):
+      Name:     buildtracker_task_notification   (or WHATSAPP_TEMPLATE_TASK env var)
+      Category: UTILITY
+      Body:     Hi {{1}}, 👋\n\n{{2}}
+      Button:   URL → "Open Task" → https://your-app.com/{{1}}
+
+    Template 2 — for plain notifications (no button):
+      Name:     buildtracker_notification   (or WHATSAPP_TEMPLATE_PLAIN env var)
+      Category: UTILITY
+      Body:     Hi {{1}}, 👋\n\n{{2}}
+
+    Required env vars:
+      WHATSAPP_ACCESS_TOKEN      – Permanent token from Meta Developer Console
+      WHATSAPP_PHONE_NUMBER_ID   – Phone Number ID from WhatsApp API Setup page
+    """
+    import requests as http
+
+    access_token    = getattr(settings, 'WHATSAPP_ACCESS_TOKEN', '')
+    phone_number_id = getattr(settings, 'WHATSAPP_PHONE_NUMBER_ID', '')
+    api_version     = getattr(settings, 'WHATSAPP_API_VERSION', 'v19.0')
+    task_template   = getattr(settings, 'WHATSAPP_TEMPLATE_TASK', 'buildtracker_task_notification')
+    plain_template  = getattr(settings, 'WHATSAPP_TEMPLATE_PLAIN', 'buildtracker_notification')
+
+    if not access_token or not phone_number_id:
+        logger.warning("WhatsApp credentials not configured (WHATSAPP_ACCESS_TOKEN / WHATSAPP_PHONE_NUMBER_ID). Skipping.")
+        return False
+
+    # Normalise phone to E.164 format (+countrycode...)
+    phone = phone.strip().replace(' ', '').replace('-', '')
+    if phone.startswith('0'):
+        phone = f'+234{phone[1:]}'   # Default to Nigeria — adjust if needed
+    elif not phone.startswith('+'):
+        phone = f'+{phone}'
+
+    api_url = f'https://graph.facebook.com/{api_version}/{phone_number_id}/messages'
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json',
+    }
+
+    if action_url:
+        # Task notification template with "Open Task" CTA button.
+        # The button URL in Meta is set as: https://your-app.com/{{1}}
+        # We pass the path suffix (everything after the domain) as the variable.
+        frontend_url = getattr(settings, 'FRONTEND_URL', '').rstrip('/')
+        url_suffix = action_url[len(frontend_url):].lstrip('/') if action_url.startswith(frontend_url) else action_url
+
+        payload = {
+            'messaging_product': 'whatsapp',
+            'to': phone,
+            'type': 'template',
+            'template': {
+                'name': task_template,
+                'language': {'code': 'en_US'},
+                'components': [
+                    {
+                        'type': 'body',
+                        'parameters': [
+                            {'type': 'text', 'text': user_name},
+                            {'type': 'text', 'text': body},
+                        ],
+                    },
+                    {
+                        'type': 'button',
+                        'sub_type': 'url',
+                        'index': '0',
+                        'parameters': [
+                            {'type': 'text', 'text': url_suffix},
+                        ],
+                    },
+                ],
+            },
+        }
+    else:
+        # Plain notification template (no button).
+        payload = {
+            'messaging_product': 'whatsapp',
+            'to': phone,
+            'type': 'template',
+            'template': {
+                'name': plain_template,
+                'language': {'code': 'en_US'},
+                'components': [
+                    {
+                        'type': 'body',
+                        'parameters': [
+                            {'type': 'text', 'text': user_name},
+                            {'type': 'text', 'text': body},
+                        ],
+                    },
+                ],
+            },
+        }
+
+    try:
+        response = http.post(api_url, json=payload, headers=headers, timeout=10)
+        if response.status_code == 200:
+            logger.info(f"WhatsApp message sent to {phone}")
+            return True
+        else:
+            logger.error(f"WhatsApp API error {response.status_code}: {response.text}")
+            if not fail_silently:
+                raise Exception(f"WhatsApp API error {response.status_code}: {response.text}")
+            return False
+    except Exception as e:
+        logger.error(f"WhatsApp send error for {phone}: {e}")
+        if not fail_silently:
+            raise
+        return False
+
+
 def send_dual_notification(user, subject, message, fail_silently=False, extra_context=None):
     """
-    Sends notification via both Email and SMS (Twilio) using a background task.
+    Sends notification via Email + WhatsApp using a background task.
+    WhatsApp is only sent if the user has a phone number on their profile.
     """
     from core.tasks import send_dual_notification_task
     send_dual_notification_task.delay(user.id, subject, message, fail_silently, extra_context or {})
