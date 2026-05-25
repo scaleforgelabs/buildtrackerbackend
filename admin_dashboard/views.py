@@ -861,6 +861,231 @@ async def admin_pricing_update_view(request, plan_type):
     return await _sync()
 
 
+# ─── revenue dashboard ───────────────────────────────────────────────────────
+
+@extend_schema(tags=["Admin Dashboard"], summary="Revenue metrics — MRR, ARR, provider breakdown, trend")
+@api_view(['GET'])
+@permission_classes([IsAdmin])
+async def admin_revenue_view(request):
+    @sync_to_async
+    def _sync():
+        from django.db.models import Sum, Count
+        from django.db.models.functions import TruncMonth
+        from subscriptions.models import Subscription, PaymentHistory
+        from subscriptions.utils import get_plan_price
+
+        now = timezone.now()
+        PAID_PLANS = ['starter', 'premium', 'custom', 'pro', 'business', 'enterprise']
+
+        # ── MRR / ARR from active subscriptions (committed revenue) ──────────
+        active_subs = list(Subscription.objects.filter(status='active', plan_type__in=PAID_PLANS))
+        mrr_ngn = 0.0
+        for sub in active_subs:
+            if sub.billing_cycle == 'yearly':
+                mrr_ngn += get_plan_price(sub.plan_type, 'NGN', 'yearly') / 12
+            else:
+                mrr_ngn += get_plan_price(sub.plan_type, 'NGN', 'monthly')
+        arr_ngn = mrr_ngn * 12
+
+        # ── Actual cash collected from PaymentHistory ─────────────────────────
+        successful = PaymentHistory.objects.filter(status='success')
+
+        total_ngn = float(successful.filter(currency='NGN').aggregate(t=Sum('amount'))['t'] or 0)
+        total_usd = float(successful.filter(currency='USD').aggregate(t=Sum('amount'))['t'] or 0)
+
+        # By provider
+        by_provider = {}
+        for row in successful.values('payment_provider', 'currency').annotate(total=Sum('amount'), txns=Count('id')):
+            key = row['payment_provider'] or 'unknown'
+            if key not in by_provider:
+                by_provider[key] = {'ngn': 0.0, 'usd': 0.0, 'count': 0}
+            if row['currency'] == 'NGN':
+                by_provider[key]['ngn'] += float(row['total'])
+            else:
+                by_provider[key]['usd'] += float(row['total'])
+            by_provider[key]['count'] += row['txns']
+
+        # By plan
+        by_plan = {}
+        for row in successful.values('plan_type', 'currency').annotate(total=Sum('amount'), txns=Count('id')):
+            key = row['plan_type'] or 'unknown'
+            if key not in by_plan:
+                by_plan[key] = {'ngn': 0.0, 'usd': 0.0, 'count': 0}
+            if row['currency'] == 'NGN':
+                by_plan[key]['ngn'] += float(row['total'])
+            else:
+                by_plan[key]['usd'] += float(row['total'])
+            by_plan[key]['count'] += row['txns']
+
+        # Monthly trend — last 12 months, NGN only
+        twelve_ago = now - timedelta(days=365)
+        trend_rows = list(
+            successful.filter(transaction_date__gte=twelve_ago, currency='NGN')
+            .annotate(month=TruncMonth('transaction_date'))
+            .values('month')
+            .annotate(total=Sum('amount'), count=Count('id'))
+            .order_by('month')
+        )
+        monthly_trend = [
+            {'month': r['month'].strftime('%Y-%m'), 'total': float(r['total']), 'count': r['count']}
+            for r in trend_rows
+        ]
+
+        # Recent payments
+        recent = []
+        for p in successful.select_related('organization').order_by('-transaction_date')[:15]:
+            recent.append({
+                'id': str(p.id),
+                'organization': p.organization.name if p.organization else '—',
+                'amount': float(p.amount),
+                'currency': p.currency,
+                'payment_provider': p.payment_provider,
+                'plan_type': p.plan_type or '—',
+                'reference': p.reference,
+                'date': p.transaction_date.isoformat(),
+            })
+
+        return Response({
+            'mrr_ngn': round(mrr_ngn, 2),
+            'arr_ngn': round(arr_ngn, 2),
+            'total_revenue_ngn': round(total_ngn, 2),
+            'total_revenue_usd': round(total_usd, 2),
+            'active_paid_count': len(active_subs),
+            'by_provider': by_provider,
+            'by_plan': by_plan,
+            'monthly_trend': monthly_trend,
+            'recent_payments': recent,
+        })
+    return await _sync()
+
+
+# ─── generate custom payment link via Paystack ───────────────────────────────
+
+@extend_schema(tags=["Admin Dashboard"], summary="Generate a Paystack payment link for a custom plan customer")
+@api_view(['POST'])
+@permission_classes([IsAdmin])
+async def admin_generate_payment_link_view(request):
+    @sync_to_async
+    def _sync():
+        import requests as req
+        import uuid as _uuid
+        from django.conf import settings as djsettings
+        from subscriptions.models import PaymentHistory
+        from organizations.models import Organization
+
+        email       = request.data.get('email', '').strip()
+        amount      = request.data.get('amount')
+        description = request.data.get('description', 'Custom Plan — BuildTracker').strip()
+        org_name    = request.data.get('org_name', '').strip()
+        send_email_flag = request.data.get('send_email', True)
+
+        if not email or not amount:
+            return Response({'error': 'email and amount are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            amount_float = float(amount)
+            if amount_float <= 0:
+                raise ValueError
+        except (ValueError, TypeError):
+            return Response({'error': 'amount must be a positive number'}, status=status.HTTP_400_BAD_REQUEST)
+
+        reference  = f'custom_{_uuid.uuid4().hex[:20]}'
+        amount_kobo = int(amount_float * 100)
+        callback_url = getattr(djsettings, 'FRONTEND_URL', '') + '/payment/verify'
+
+        resp = req.post(
+            'https://api.paystack.co/transaction/initialize',
+            headers={
+                'Authorization': f'Bearer {djsettings.PAYSTACK_SECRET_KEY}',
+                'Content-Type': 'application/json',
+            },
+            json={
+                'email': email,
+                'amount': amount_kobo,
+                'currency': 'NGN',
+                'reference': reference,
+                'callback_url': callback_url,
+                'metadata': {
+                    'custom_fields': [
+                        {'display_name': 'Plan',         'variable_name': 'plan_type',    'value': 'custom'},
+                        {'display_name': 'Organisation', 'variable_name': 'org_name',     'value': org_name},
+                        {'display_name': 'Description',  'variable_name': 'description',  'value': description},
+                        {'display_name': 'Generated by', 'variable_name': 'generated_by', 'value': request.user.email},
+                    ]
+                },
+            },
+            timeout=10,
+        )
+
+        if resp.status_code != 200 or not resp.json().get('status'):
+            return Response(
+                {'error': 'Paystack rejected the request', 'detail': resp.json()},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        payment_url = resp.json()['data']['authorization_url']
+
+        # Pre-create a pending PaymentHistory so the webhook can activate the subscription
+        try:
+            owner = User.objects.get(email=email)
+            org   = Organization.objects.filter(owner=owner).first()
+            if org:
+                PaymentHistory.objects.create(
+                    organization=org,
+                    amount=amount_float,
+                    currency='NGN',
+                    payment_provider='paystack',
+                    reference=reference,
+                    status='pending',
+                    plan_type='custom',
+                    billing_cycle='monthly',
+                    metadata={
+                        'type': 'custom_invoice',
+                        'description': description,
+                        'generated_by': request.user.email,
+                    },
+                )
+        except User.DoesNotExist:
+            pass  # customer not in system yet — admin will activate manually after payment
+
+        # Email the payment link to the customer
+        if send_email_flag:
+            from core.tasks import send_email_task
+            recipient_name = None
+            try:
+                u = User.objects.get(email=email)
+                recipient_name = f"{u.first_name} {u.last_name}".strip() or None
+            except User.DoesNotExist:
+                pass
+
+            send_email_task.delay(
+                subject=f'Your BuildTracker Payment Link — {description}',
+                message=(
+                    f'Please complete your payment of ₦{amount_float:,.0f} for {description}. '
+                    f'Click the button below to pay securely via Paystack.'
+                ),
+                recipient_list=[email],
+                fail_silently=True,
+                extra_context={
+                    'email_type': 'general_update',
+                    'chip_label': 'Invoice',
+                    'action_url': payment_url,
+                    'action_text': 'Pay Now — ₦{:,.0f}'.format(amount_float),
+                    'recipient_name': recipient_name,
+                },
+            )
+
+        return Response({
+            'payment_url': payment_url,
+            'reference': reference,
+            'amount': amount_float,
+            'currency': 'NGN',
+            'email': email,
+            'emailed': bool(send_email_flag),
+        })
+    return await _sync()
+
+
 # ─── set subscription plan (admin override) ───────────────────────────────────
 
 @extend_schema(tags=["Admin Dashboard"], summary="Manually set a subscription plan for an organisation")

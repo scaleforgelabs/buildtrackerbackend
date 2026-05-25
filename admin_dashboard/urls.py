@@ -24,6 +24,9 @@ urlpatterns = [
     path('leads/<int:lead_id>/contacts/add/', views.admin_lead_contact_create_view, name='admin-lead-contact-create'),
     path('leads/<int:lead_id>/contacts/<int:contact_id>/', views.admin_lead_contact_detail_view, name='admin-lead-contact-detail'),
     path('leads/<int:lead_id>/contacts/<int:contact_id>/email/', views.admin_send_contact_email_view, name='admin-contact-email'),
+    # Revenue
+    path('revenue/', views.admin_revenue_view, name='admin-revenue'),
+    path('revenue/payment-link/', views.admin_generate_payment_link_view, name='admin-payment-link'),
     # Plan Pricing
     path('pricing/', views.admin_pricing_list_view, name='admin-pricing-list'),
     path('pricing/<str:plan_type>/', views.admin_pricing_update_view, name='admin-pricing-update'),
