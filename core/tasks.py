@@ -61,7 +61,21 @@ def send_dual_notification_task(user_id, subject, message, fail_silently=False, 
         if not fail_silently:
             raise
 
-    # ── WhatsApp notification ────────────────────────────────────────────────
+    # ── WhatsApp notification (paid plans only) ──────────────────────────────
+    FREE_PLAN = 'free'
+    WHATSAPP_ELIGIBLE_PLANS = {'starter', 'premium', 'custom', 'pro', 'business', 'enterprise'}
+
+    plan = getattr(user, 'plan_type', FREE_PLAN) or FREE_PLAN
+    is_eligible = (
+        plan in WHATSAPP_ELIGIBLE_PLANS
+        or user.is_staff
+        or user.is_superuser
+    )
+
+    if not is_eligible:
+        logger.info(f"User {user.email} is on the free plan. WhatsApp skipped.")
+        return
+
     if not user.phone:
         logger.info(f"User {user.email} has no phone number. WhatsApp skipped.")
         return
@@ -73,7 +87,7 @@ def send_dual_notification_task(user_id, subject, message, fail_silently=False, 
     send_whatsapp_message(
         phone=user.phone,
         user_name=user_name,
-        body=subject,          # Subject is concise and descriptive — ideal for WhatsApp
-        action_url=action_url, # Deep link to the task (None for non-task notifications)
+        body=subject,
+        action_url=action_url,
         fail_silently=True,
     )

@@ -1005,6 +1005,7 @@ async def me_view(request):
                 'avatar': user.avatar.url if user.avatar else None,
                 'last_active_workspace': user.last_active_workspace,
                 'platform_role': user.platform_role,
+                'plan_type': 'custom' if (user.is_staff or user.is_superuser) else user.plan_type,
                 'scheduled_for_deletion_at': user.scheduled_for_deletion_at.isoformat() if user.scheduled_for_deletion_at else None,
             }
         }
