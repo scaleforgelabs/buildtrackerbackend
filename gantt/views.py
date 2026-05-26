@@ -1,5 +1,6 @@
 import csv
 import io
+import uuid
 from datetime import date, timedelta
 
 from rest_framework import status, permissions
@@ -264,6 +265,13 @@ _COL_MAP = {
     'resource names': 'assignee_name', 'assigned to': 'assignee_name',
     'notes': 'notes', 'description': 'notes',
     'type': 'task_type', 'task type': 'task_type',
+    'estimated cost': 'estimated_cost', 'actual cost': 'actual_cost',
+}
+
+# Columns that are known but don't map to a field (ignore, not custom fields)
+_SKIP_COLS = {
+    'duration', 'wbs', 'outline number', 'outline level',
+    'id', 'unique id', 'cost', 'baseline cost', 'baseline duration',
 }
 
 
@@ -291,13 +299,34 @@ def gantt_import(request, workspaceId, projectId):
     order = (last.display_order + 1) if last else 0
     created = 0
 
+    # ── Detect custom-field columns from the CSV header ──────────────────
+    # Any column that is not in _COL_MAP and not in _SKIP_COLS is treated
+    # as a custom field.  We auto-add unknown ones to the project schema.
+    schema = list(project.custom_field_schema or [])
+    schema_by_name = {f['name'].lower(): f['id'] for f in schema}
+    custom_col_names = []  # original-case column names that are custom fields
+
+    for col in (reader.fieldnames or []):
+        col_lower = col.strip().lower()
+        if col_lower in _COL_MAP or col_lower in _SKIP_COLS or not col_lower:
+            continue
+        custom_col_names.append(col.strip())
+        if col_lower not in schema_by_name:
+            field_id = str(uuid.uuid4())
+            schema.append({'id': field_id, 'name': col.strip(), 'type': 'text'})
+            schema_by_name[col_lower] = field_id
+
+    if custom_col_names:
+        project.custom_field_schema = schema
+        project.save(update_fields=['custom_field_schema'])
+
+    # ── Import rows ───────────────────────────────────────────────────────
     for row in reader:
-        # Normalise column headers to lowercase
-        normalised = {k.strip().lower(): v.strip() for k, v in row.items() if v}
+        normalised = {k.strip().lower(): v.strip() for k, v in row.items()}
         mapped = {}
         for col, value in normalised.items():
             field = _COL_MAP.get(col)
-            if field:
+            if field and value:
                 mapped[field] = value
 
         name = mapped.get('name', '').strip()
@@ -314,21 +343,41 @@ def gantt_import(request, workspaceId, projectId):
         except (ValueError, AttributeError):
             prog = 0
 
+        # Collect custom field values for this row
+        custom_fields = {}
+        for col_name in custom_col_names:
+            field_id = schema_by_name.get(col_name.lower())
+            value = row.get(col_name, '').strip()
+            if field_id and value:
+                custom_fields[field_id] = value
+
+        # Parse optional cost fields
+        def _parse_decimal(v):
+            try:
+                return float(v.replace(',', '')) if v else None
+            except ValueError:
+                return None
+
         GanttTask.objects.create(
             project=project,
             name=name,
             start_date=start,
             end_date=end,
             progress=min(100, max(0, prog)),
-            task_type=mapped.get('task_type', 'task').lower() if mapped.get('task_type', '').lower() in ('task', 'milestone', 'project') else 'task',
+            task_type=mapped.get('task_type', 'task').lower()
+                if mapped.get('task_type', '').lower() in ('task', 'milestone', 'project')
+                else 'task',
             dependencies=mapped.get('dependencies', ''),
             notes=mapped.get('notes', ''),
+            estimated_cost=_parse_decimal(mapped.get('estimated_cost', '')),
+            actual_cost=_parse_decimal(mapped.get('actual_cost', '')),
+            custom_fields=custom_fields,
             display_order=order,
         )
         order += 1
         created += 1
 
-    return Response({'created': created})
+    return Response({'created': created, 'custom_fields_added': len(custom_col_names)})
 
 
 # ─────────────────────────────────────────────
