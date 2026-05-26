@@ -130,6 +130,8 @@ def default_modules():
         "my_tasks": True,
         "logs": True,
         "sprint_planning": True,
+        "gantt": True,
+        "checkin": True,
     }
 
 class WorkspaceSettings(models.Model):

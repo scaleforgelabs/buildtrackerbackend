@@ -34,6 +34,7 @@ urlpatterns = [
     path('api/', include('notifications.urls')),
     path('api/', include('widgets.urls')),
     path('api/admin-dashboard/', include('admin_dashboard.urls')),
+    path('api/gantt/', include('gantt.urls')),
 ]
 
 if settings.DEBUG:

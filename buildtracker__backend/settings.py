@@ -101,6 +101,7 @@ INSTALLED_APPS = [
     'notifications',
     'widgets',
     'checkins',
+    'gantt',
     'storages',
     'admin_dashboard',
 ]

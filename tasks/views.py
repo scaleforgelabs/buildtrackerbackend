@@ -168,7 +168,7 @@ async def workspace_tasks(request, workspaceId):
                 )
 
                 if not check_workspace_permission(request.user, workspace, ['Owner', 'Admin']):
-                    tasks = tasks.filter(Q(assigned_to=request.user) | Q(created_by=request.user))
+                    tasks = tasks.filter(assigned_to=request.user)
 
                 filtered_tasks = get_filtered_tasks(tasks, request)
 
