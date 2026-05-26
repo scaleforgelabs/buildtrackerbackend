@@ -27,47 +27,66 @@ class Folder(models.Model):
             return f"{self.parent.get_path()}/{self.name}"
         return self.name
     
+    def _get_descendant_folder_ids(self):
+        """
+        Return the set of PKs for this folder and all descendants.
+        Uses 1 query (all folders in the workspace) instead of O(depth) recursive queries.
+        """
+        all_pairs = list(
+            Folder.objects.filter(workspace_id=self.workspace_id)
+            .values_list('id', 'parent_id')
+        )
+        children_map: dict = {}
+        for fid, parent_id in all_pairs:
+            if parent_id is not None:
+                children_map.setdefault(parent_id, []).append(fid)
+
+        ids = set()
+        queue = [self.pk]
+        while queue:
+            current = queue.pop()
+            ids.add(current)
+            queue.extend(children_map.get(current, []))
+        return ids
+
     def get_all_subfolders(self):
-        """Get all nested subfolders"""
-        subfolders = list(self.subfolders.all())
-        for subfolder in self.subfolders.all():
-            subfolders.extend(subfolder.get_all_subfolders())
-        return subfolders
+        """Return all nested subfolders using 1 query instead of O(depth) recursive queries."""
+        descendant_ids = self._get_descendant_folder_ids()
+        descendant_ids.discard(self.pk)  # exclude self
+        return list(Folder.objects.filter(id__in=descendant_ids))
 
     def get_total_size(self):
-        """Recursively calculate total size of all files in this folder and subfolders"""
-        total = sum(file.file_size for file in self.files.all())
-        for subfolder in self.subfolders.all():
-            total += subfolder.get_total_size()
-        return total
+        """Calculate total size of all files in this folder and subfolders (2 queries, not O(depth))."""
+        from django.db.models import Sum
+        all_folder_ids = self._get_descendant_folder_ids()
+        result = File.objects.filter(folder_id__in=all_folder_ids).aggregate(total=Sum('file_size'))
+        return result['total'] or 0
 
     def get_item_count(self):
-        """Count only immediate items (files + subfolders) in this folder"""
+        """Count only immediate items (files + subfolders) in this folder."""
         return self.files.count() + self.subfolders.count()
 
     def get_contributors(self):
-        """Get unique set of users (recursive) who have created subfolders or uploaded files"""
-        from django.contrib.auth import get_user_model
-        User = get_user_model()
-        
-        # All contributors recursively (uploaders)
-        user_ids = self.get_contributors_ids()
-        
-        # Add this folder's creator
-        user_ids.add(self.created_by_id)
-        
-        # Add subfolders' creators recursively
-        for subfolder in self.get_all_subfolders():
-            user_ids.add(subfolder.created_by_id)
-            
-        return User.objects.filter(id__in=user_ids)
+        """Get unique contributors (uploaders + folder creators) across all descendants (2 queries)."""
+        all_folder_ids = self._get_descendant_folder_ids()
+        uploader_ids = set(
+            File.objects.filter(folder_id__in=all_folder_ids)
+            .values_list('uploaded_by', flat=True)
+        )
+        creator_ids = set(
+            Folder.objects.filter(id__in=all_folder_ids)
+            .values_list('created_by', flat=True)
+        )
+        all_ids = uploader_ids | creator_ids
+        return User.objects.filter(id__in=all_ids)
 
     def get_contributors_ids(self):
-        """Helper to get uploader IDs recursively"""
-        ids = set(self.files.values_list('uploaded_by', flat=True))
-        for subfolder in self.subfolders.all():
-            ids.update(subfolder.get_contributors_ids())
-        return ids
+        """Return uploader IDs for this folder and all descendants (2 queries)."""
+        all_folder_ids = self._get_descendant_folder_ids()
+        return set(
+            File.objects.filter(folder_id__in=all_folder_ids)
+            .values_list('uploaded_by', flat=True)
+        )
 
 class File(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

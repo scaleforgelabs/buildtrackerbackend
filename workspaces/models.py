@@ -32,7 +32,11 @@ class Workspace(models.Model):
     
     class Meta:
         ordering = ['-created_at']
-    
+        indexes = [
+            models.Index(fields=['organization', 'status'], name='workspace_org_status_idx'),
+            models.Index(fields=['owner', 'status'],        name='workspace_owner_status_idx'),
+        ]
+
     def save(self, *args, **kwargs):
         if not self.slug:
             from django.utils.text import slugify
@@ -114,7 +118,10 @@ class WorkspaceInvitation(models.Model):
     
     class Meta:
         ordering = ['-created_at']
-    
+        indexes = [
+            models.Index(fields=['workspace', 'status'], name='wsinvite_workspace_status_idx'),
+        ]
+
     def __str__(self):
         return f"Invitation to {self.email} for {self.workspace.name}"
     

@@ -254,6 +254,11 @@ CACHES = {
     }
 }
 
+# Store sessions in Redis instead of the database.
+# Benefits: auto-expiry (no table bloat), faster reads, no clearsessions cron needed.
+SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+SESSION_CACHE_ALIAS = 'default'
+
 # Celery Configuration
 CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://127.0.0.1:6379/0')
 CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://127.0.0.1:6379/0')
@@ -269,6 +274,7 @@ CELERY_WORKER_PREFETCH_MULTIPLIER = 1  # Prevent workers from hoarding tasks
 CELERY_TASK_REJECT_ON_WORKER_LOST = True  # Requeue tasks if worker is killed
 CELERY_TASK_TIME_LIMIT = 300  # Hard kill tasks after 5 minutes
 CELERY_TASK_SOFT_TIME_LIMIT = 240  # Raise SoftTimeLimitExceeded after 4 minutes
+CELERY_RESULT_EXPIRES = 3600  # Purge task results from Redis after 1 hour (prevents unbounded growth)
 
 # Celery Beat Schedule for Periodic Tasks
 from celery.schedules import crontab  # noqa: E402

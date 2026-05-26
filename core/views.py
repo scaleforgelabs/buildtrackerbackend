@@ -102,13 +102,50 @@ def index(request):
 
 def health_check(request):
     """Lightweight health check for load balancer probes.
-    
+
     IMPORTANT: This endpoint must NOT:
     - Require authentication
     - Hit the database
     - Use DRF serialization
     - Run through heavy middleware
-    
+
     It should respond in < 1ms with a simple 200 OK.
     """
     return JsonResponse({'status': 'ok'}, status=200)
+
+
+def health_check_deep(request):
+    """Deep health check — verifies DB and Redis are reachable.
+
+    Use this for monitoring/alerting dashboards (NOT the load balancer probe,
+    as it may be slower than the shallow check above).
+    Returns 200 if all systems ok, 503 if any dependency is down.
+    """
+    from django.db import connection
+    checks = {}
+    healthy = True
+
+    # Database
+    try:
+        connection.ensure_connection()
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT 1')
+        checks['database'] = 'ok'
+    except Exception as exc:
+        checks['database'] = str(exc)
+        healthy = False
+
+    # Cache / Redis
+    try:
+        cache.set('_health_probe', '1', timeout=5)
+        assert cache.get('_health_probe') == '1'
+        checks['cache'] = 'ok'
+    except Exception as exc:
+        checks['cache'] = str(exc)
+        healthy = False
+
+    status_code = 200 if healthy else 503
+    return JsonResponse(
+        {'status': 'ok' if healthy else 'degraded', 'checks': checks},
+        status=status_code,
+    )

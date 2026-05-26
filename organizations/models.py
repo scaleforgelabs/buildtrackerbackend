@@ -84,20 +84,25 @@ class Organization(models.Model):
         return (current_usage['storage_used_mb'] + file_size_mb) <= self.get_plan_limits()['max_storage_mb']
     
     def get_current_usage(self):
-        usage, created = OrganizationUsage.objects.get_or_create(
-            organization=self,
-            defaults={
-                'user_count': self.member_count,
-                'workspace_count': self.workspaces.count(),
-                'storage_used_mb': 0,
-                'file_count': 0
-            }
-        )
+        # Avoid evaluating self.member_count / self.workspaces.count() eagerly —
+        # get_or_create used to trigger those queries on EVERY call even when the
+        # record already existed, because Python evaluates dict literals before
+        # passing them to the function.
+        try:
+            usage = self.usage  # cached by OneToOneField reverse accessor
+        except OrganizationUsage.DoesNotExist:
+            usage = OrganizationUsage.objects.create(
+                organization=self,
+                user_count=self.members.count(),
+                workspace_count=self.workspaces.count(),
+                storage_used_mb=0,
+                file_count=0,
+            )
         return {
             'user_count': usage.user_count,
             'workspace_count': usage.workspace_count,
             'storage_used_mb': usage.storage_used_mb,
-            'file_count': usage.file_count
+            'file_count': usage.file_count,
         }
 
 class OrganizationMembership(models.Model):

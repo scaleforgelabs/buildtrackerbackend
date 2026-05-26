@@ -52,6 +52,9 @@ class Task(models.Model):
         unique_together = ['workspace', 'ticket_number']
         indexes = [
             GinIndex(fields=['search_vector']),
+            models.Index(fields=['workspace', 'status'],      name='task_workspace_status_idx'),
+            models.Index(fields=['workspace', 'assigned_to'], name='task_workspace_assigned_idx'),
+            models.Index(fields=['workspace', 'created_at'],  name='task_workspace_created_idx'),
         ]
     
     def __str__(self):

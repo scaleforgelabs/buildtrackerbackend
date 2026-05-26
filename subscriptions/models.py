@@ -76,6 +76,11 @@ class Subscription(models.Model):
             
         super().save(*args, **kwargs)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['status', 'next_billing_date'], name='sub_status_billing_idx'),
+        ]
+
     def __str__(self):
         return f"{self.organization.name} - {self.plan_type}"
 
@@ -102,6 +107,12 @@ class PaymentHistory(models.Model):
     billing_cycle = models.CharField(max_length=20, choices=Subscription.BILLING_CYCLE_CHOICES, default='monthly')
     transaction_date = models.DateTimeField(auto_now_add=True)
     metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['organization', 'status'],      name='payment_org_status_idx'),
+            models.Index(fields=['status', 'transaction_date'],  name='payment_status_date_idx'),
+        ]
 
     def __str__(self):
         return f"{self.organization.name} - {self.amount} {self.currency} - {self.status}"
