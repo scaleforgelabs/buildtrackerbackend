@@ -129,9 +129,9 @@ def default_modules():
         "planning": True,
         "my_tasks": True,
         "logs": True,
-        "sprint_planning": True,
-        "gantt": True,
-        "checkin": True,
+        "sprint_planning": False,
+        "gantt": False,
+        "checkin": False,
     }
 
 class WorkspaceSettings(models.Model):
