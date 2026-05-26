@@ -140,7 +140,7 @@ class TaskSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'task_name', 'task_description', 'assigned_to', 'assigned_user',
             'created_by', 'created_by_user', 'status', 'priority', 'start_date',
-            'end_date', 'duration', 'milestone', 'sprint', 'percent_complete',
+            'end_date', 'duration', 'milestone', 'sprint', 'story_points', 'percent_complete',
             'has_blocker', 'blocker_reason', 'ticket_number', 'created_at',
             'updated_at', 'comments', 'attachments'
         ]
@@ -155,9 +155,9 @@ class TaskListSerializer(serializers.ModelSerializer):
         model = Task
         fields = [
             'id', 'task_name', 'assigned_to', 'assigned_user',
-            'created_by', 'created_by_user', 'status', 'priority', 
-            'start_date', 'end_date', 'milestone', 'sprint', 
-            'percent_complete', 'has_blocker', 'ticket_number', 
+            'created_by', 'created_by_user', 'status', 'priority',
+            'start_date', 'end_date', 'milestone', 'sprint', 'story_points',
+            'percent_complete', 'has_blocker', 'ticket_number',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['ticket_number', 'created_by', 'created_at', 'updated_at']
@@ -189,7 +189,7 @@ class TaskCreateSerializer(serializers.ModelSerializer):
         model = Task
         fields = [
             'task_name', 'task_description', 'assigned_to', 'priority', 'status',
-            'start_date', 'end_date', 'milestone', 'sprint',
+            'start_date', 'end_date', 'milestone', 'sprint', 'story_points',
             'percent_complete', 'attachments'
         ]
     

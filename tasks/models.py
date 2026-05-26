@@ -38,6 +38,7 @@ class Task(models.Model):
     duration = models.CharField(max_length=50, blank=True, null=True)
     milestone = models.PositiveIntegerField(null=True, blank=True, db_index=True)
     sprint = models.PositiveIntegerField(null=True, blank=True, db_index=True)
+    story_points = models.PositiveIntegerField(null=True, blank=True)
     percent_complete = models.PositiveIntegerField(default=0)
     has_blocker = models.BooleanField(default=False)
     blocker_reason = models.TextField(blank=True, null=True)
@@ -151,6 +152,34 @@ class TaskAttachment(models.Model):
         if self.file and not self.file_size:
             self.file_size = self.file.size
         super().save(*args, **kwargs)
+
+class Sprint(models.Model):
+    STATUS_CHOICES = [
+        ('planning', 'Planning'),
+        ('active', 'Active'),
+        ('completed', 'Completed'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey('workspaces.Workspace', on_delete=models.CASCADE, related_name='sprints')
+    name = models.CharField(max_length=255)
+    goal = models.TextField(blank=True, null=True)
+    sprint_number = models.PositiveIntegerField()
+    start_date = models.DateField()
+    end_date = models.DateField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='planning', db_index=True)
+    duration_weeks = models.FloatField(null=True, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_sprints')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['sprint_number']
+        unique_together = ['workspace', 'sprint_number']
+
+    def __str__(self):
+        return f"Sprint {self.sprint_number} - {self.name}"
+
 
 class PersonalTask(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

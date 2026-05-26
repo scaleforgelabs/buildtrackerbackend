@@ -128,7 +128,8 @@ def default_modules():
     return {
         "planning": True,
         "my_tasks": True,
-        "logs": True
+        "logs": True,
+        "sprint_planning": True,
     }
 
 class WorkspaceSettings(models.Model):
