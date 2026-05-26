@@ -17,6 +17,9 @@ python manage.py migrate --noinput
 echo "=== Collecting static files ==="
 python manage.py collectstatic --noinput --clear 2>/dev/null || true
 
+echo "=== Clearing port 8000 ==="
+sudo fuser -k 8000/tcp 2>/dev/null || true
+
 echo "=== Restarting services ==="
 sudo supervisorctl restart buildtracker:*
 sudo systemctl restart nginx
