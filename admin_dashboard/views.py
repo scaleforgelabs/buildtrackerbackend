@@ -887,8 +887,16 @@ async def admin_revenue_view(request):
         now = timezone.now()
         PAID_PLANS = ['starter', 'premium', 'custom', 'pro', 'business', 'enterprise']
 
-        # ── MRR / ARR from active subscriptions (committed revenue) ──────────
-        active_subs = list(Subscription.objects.filter(status='active', plan_type__in=PAID_PLANS))
+        # ── MRR / ARR — only subscriptions with at least one collected payment ──
+        paid_org_ids = set(
+            PaymentHistory.objects.filter(status='success', plan_type__in=PAID_PLANS)
+            .values_list('organization_id', flat=True)
+        )
+        active_subs = list(Subscription.objects.filter(
+            status='active',
+            plan_type__in=PAID_PLANS,
+            organization_id__in=paid_org_ids,
+        ))
         mrr_ngn = 0.0
         for sub in active_subs:
             if sub.billing_cycle == 'yearly':
