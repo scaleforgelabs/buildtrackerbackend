@@ -13,9 +13,16 @@ class UniqueS3Boto3Storage(S3Boto3Storage):
         # Split the path and the filename
         dir_name, file_name = os.path.split(name)
         file_root, file_ext = os.path.splitext(file_name)
-        
+
         # Inject an 8-character UUID into the filename to guarantee uniqueness
         unique_name = f"{file_root}_{uuid.uuid4().hex[:8]}{file_ext}"
-        
-        # Rejoin with the original directory
-        return os.path.join(dir_name, unique_name)
+        full_path = os.path.join(dir_name, unique_name)
+
+        # Truncate file_root if the full path exceeds max_length
+        if max_length and len(full_path) > max_length:
+            overhead = len(dir_name) + len(file_ext) + len("/_12345678") + 1  # slash + uuid suffix
+            max_root = max_length - overhead
+            unique_name = f"{file_root[:max_root]}_{uuid.uuid4().hex[:8]}{file_ext}"
+            full_path = os.path.join(dir_name, unique_name)
+
+        return full_path

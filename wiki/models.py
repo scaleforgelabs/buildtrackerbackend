@@ -51,7 +51,7 @@ class WikiDocument(models.Model):
 class WikiDocumentAttachment(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     document = models.ForeignKey(WikiDocument, on_delete=models.CASCADE, related_name='attachments')
-    file = models.FileField(upload_to='wiki_attachments/', null=True, blank=True)
+    file = models.FileField(upload_to='wiki_attachments/', null=True, blank=True, max_length=500)
     file_url = models.URLField(null=True, blank=True)
     file_name = models.CharField(max_length=255)
     file_size = models.PositiveIntegerField(null=True, blank=True)
