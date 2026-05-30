@@ -12,7 +12,7 @@ from datetime import timedelta
 from drf_spectacular.utils import extend_schema
 import secrets
 import string
-from .models import Workspace, WorkspaceMember, WorkspaceInvitation, WorkspaceSettings
+from .models import Workspace, WorkspaceMember, WorkspaceInvitation, WorkspaceSettings, WorkspaceInviteLink
 from .serializers import (
     WorkspaceSerializer, WorkspaceCreateSerializer, WorkspaceMemberSerializer,
     WorkspaceInvitationSerializer, WorkspaceMemberCreateSerializer
@@ -1124,6 +1124,148 @@ async def get_invitation_details(request, token):
             return Response({'error': 'Invalid invitation token'}, status=status.HTTP_404_NOT_FOUND)
 
     return await _sync_logic()
+
+
+# ── Shareable Invite Link ─────────────────────────────────────────────────────
+
+@api_view(['GET', 'POST', 'DELETE'])
+@permission_classes([permissions.IsAuthenticated])
+async def workspace_invite_link(request, id):
+    """
+    GET    — return existing active link (or null)
+    POST   — create link (or regenerate if one exists)
+    DELETE — revoke current link
+    """
+    @sync_to_async
+    def _sync_logic():
+        workspace = get_workspace_by_id_or_slug(id)
+
+        if not check_workspace_permission(request.user, workspace, ['Owner', 'Admin']):
+            return Response({'error': 'Only owners and admins can manage invite links'}, status=status.HTTP_403_FORBIDDEN)
+
+        if request.method == 'GET':
+            try:
+                link = WorkspaceInviteLink.objects.get(workspace=workspace, is_active=True)
+                return Response({'token': link.token, 'role': link.role, 'use_count': link.use_count})
+            except WorkspaceInviteLink.DoesNotExist:
+                return Response({'token': None})
+
+        elif request.method == 'POST':
+            WorkspaceInviteLink.objects.filter(workspace=workspace).delete()
+            token = secrets.token_urlsafe(32)
+            link = WorkspaceInviteLink.objects.create(
+                workspace=workspace,
+                created_by=request.user,
+                token=token,
+                role='Member',
+            )
+            return Response({'token': link.token, 'role': link.role, 'use_count': link.use_count}, status=status.HTTP_201_CREATED)
+
+        elif request.method == 'DELETE':
+            WorkspaceInviteLink.objects.filter(workspace=workspace).delete()
+            return Response({'message': 'Invite link revoked'})
+
+    return await _sync_logic()
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+async def join_link_preview(request, token):
+    """Public — workspace preview info for the join page."""
+    @sync_to_async
+    def _sync_logic():
+        try:
+            link = WorkspaceInviteLink.objects.select_related('workspace').get(token=token, is_active=True)
+        except WorkspaceInviteLink.DoesNotExist:
+            return Response({'error': 'Invalid or revoked invite link'}, status=status.HTTP_404_NOT_FOUND)
+
+        member_count = WorkspaceMember.objects.filter(workspace=link.workspace).count()
+        return Response({
+            'workspace': {
+                'id': str(link.workspace.id),
+                'name': link.workspace.name,
+                'description': link.workspace.description,
+                'type': link.workspace.type,
+                'member_count': member_count,
+            },
+            'role': link.role,
+        })
+
+    return await _sync_logic()
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+async def join_via_link(request, token):
+    """Authenticated — add current user to workspace via invite link."""
+    @sync_to_async
+    def _sync_logic():
+        from django.db import transaction
+
+        try:
+            link = WorkspaceInviteLink.objects.select_related('workspace').get(token=token, is_active=True)
+        except WorkspaceInviteLink.DoesNotExist:
+            return Response({'error': 'Invalid or revoked invite link'}, status=status.HTTP_404_NOT_FOUND)
+
+        workspace = link.workspace
+
+        if WorkspaceMember.objects.filter(workspace=workspace, user=request.user).exists():
+            return Response({
+                'workspace': WorkspaceSerializer(workspace, context={'request': request}).data,
+                'message': 'Already a member',
+            })
+
+        from organizations.user_org_views import calculate_user_stats, get_plan_limits
+        current_usage = calculate_user_stats(workspace.owner)
+        limits = get_plan_limits(workspace.owner.plan_type, workspace.owner)
+        if current_usage['total_potential_users'] >= limits['max_users']:
+            return Response(
+                {'error': 'This workspace has reached its member limit.'},
+                status=status.HTTP_402_PAYMENT_REQUIRED
+            )
+
+        with transaction.atomic():
+            WorkspaceMember.objects.create(
+                workspace=workspace,
+                user=request.user,
+                role=link.role,
+                email=request.user.email,
+            )
+            link.use_count += 1
+            link.save(update_fields=['use_count'])
+
+            create_workspace_log(
+                workspace=workspace,
+                user=request.user,
+                log_type='member_add',
+                action='join',
+                description=f"Joined workspace via invite link: {workspace.name}",
+                entity_type='workspace',
+                entity_id=workspace.id,
+                metadata={'workspace_name': workspace.name, 'role': link.role},
+                request=request
+            )
+
+            admins = WorkspaceMember.objects.filter(workspace=workspace, role__in=['Owner', 'Admin']).select_related('user')
+            for admin in admins:
+                if admin.user and admin.user != request.user:
+                    create_notification(
+                        user=admin.user,
+                        workspace=workspace,
+                        action=f"New Member Joined: {workspace.name}",
+                        description=f"{request.user.first_name or request.user.email} joined via invite link",
+                        note_type="member_join",
+                        severity="success",
+                        triggered_by=request.user
+                    )
+
+        return Response({
+            'workspace': WorkspaceSerializer(workspace, context={'request': request}).data,
+            'message': f'Successfully joined {workspace.name}',
+        })
+
+    return await _sync_logic()
+
 
 @extend_schema(
     tags=["Workspaces"],

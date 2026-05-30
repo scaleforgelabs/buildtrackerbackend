@@ -131,6 +131,30 @@ class WorkspaceInvitation(models.Model):
     def is_valid(self):
         return self.status == 'pending' and not self.is_expired()
 
+class WorkspaceInviteLink(models.Model):
+    """
+    A reusable, shareable link that lets anyone join a workspace.
+    Anyone with the link can join — no email required upfront.
+    """
+    ROLE_CHOICES = [
+        ('Admin', 'Admin'),
+        ('Member', 'Member'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.OneToOneField(Workspace, on_delete=models.CASCADE, related_name='invite_link')
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_invite_links')
+    token = models.CharField(max_length=64, unique=True)
+    role = models.TextField(choices=ROLE_CHOICES, default='Member')
+    is_active = models.BooleanField(default=True)
+    use_count = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"InviteLink for {self.workspace.name}"
+
+
 def default_modules():
     return {
         "planning": True,
